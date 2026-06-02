@@ -26,6 +26,7 @@ int main(int argc, char** argv) {
 	glbcfg_t config = {};
 	config.ip    = "127.0.0.1";
 	config.port  = 12345;
+	config.flags = GLB_FLAG_BIND_PORT;
 	config.alloc = &allocator;
 	config.log   = &logger;
 
