@@ -93,11 +93,12 @@ static int GLB_CloseSocket(glbctx_t* ctx) {
 
 static int GLB_BindSocket(glbctx_t* ctx, const glbcfg_t* config) {
 	char logbuf[256];
+	const char* ip = config->ip ? config->ip : "0.0.0.0";
 	struct sockaddr_in server_addr;
 	server_addr.sin_family = AF_INET;
 	server_addr.sin_port = htons(config->port);
-	inet_pton(AF_INET, config->ip, &server_addr.sin_addr);
-	snprintf(logbuf, sizeof(logbuf), "[gilberta] Binding socket to %s:%d...", config->ip, config->port);
+	inet_pton(AF_INET, ip, &server_addr.sin_addr);
+	snprintf(logbuf, sizeof(logbuf), "[gilberta] Binding socket to %s:%d...", ip, config->port);
 	ctx->logger(GLB_LOG_INFO, logbuf);
 	if (bind(ctx->sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
 		ctx->logger(GLB_LOG_ERROR, "[gilberta] Failed to bind socket.");
