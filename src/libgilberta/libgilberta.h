@@ -48,39 +48,56 @@ typedef enum GLBErrorCode {
 
 #define GLB_FLAG_BIND_PORT 0x01 // bind to the specified port (server mode)
 
+#define GLB_CHANNEL_FLAG_RELIABLE 0x01 // reliable delivery (retransmission, ordering)
+
 typedef struct glbctx_t glbctx_t;
 
 typedef void* (*GLBMalloc)(size_t);
 typedef void  (*GLBFree)(void*);
 typedef void  (*GLBLogFunc)(GLBLogLevel, const char*);
 
+// Memory allocation configuration
 typedef struct glballoc_t {
 	GLBMalloc malloc;
 	GLBFree   free;
 } glballoc_t;
 
+// Logging configuration
 typedef struct glblog_t {
 	GLBLogFunc log_func;
 } glblog_t;
 
+// Channel configuration
+typedef struct glbchan_t {
+	uint8_t priority;
+	uint8_t flags;
+	uint16_t padding;
+} glbchan_t;
+
+// Global configuration for creating a context
 typedef struct glbcfg_t {
-	const char* ip;
+	const char* ip;       // May be NULL for server mode
 	uint16_t    port;
 	uint8_t     flags;
-	uint8_t     padding0; // reserved for future use
+	uint8_t     channel_count;
 	uint32_t    padding1; // reserved for future use
 	glballoc_t* alloc;
 	glblog_t*   log;
+	glbchan_t*  channels;
 } glbcfg_t;
 
+// TODO: Add client identification
 typedef struct glbsendinfo_t {
 	const void* data;
 	size_t      len;
+	uint8_t     channel_id;
 } glbsendinfo_t;
 
 typedef struct glbrecvinfo_t {
 	void*  buffer;
 	size_t buflen;
+	size_t datalen;     // set by the library to indicate how much data was received
+	uint8_t channel_id; // set by the library to indicate which channel the received data belongs to
 } glbrecvinfo_t;
 
 #ifdef __cplusplus
