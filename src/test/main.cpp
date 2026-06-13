@@ -3,6 +3,8 @@
 #include <string.h>
 #include <libgilberta.h>
 
+#include <vector>
+
 static uint8_t     isClient    = 0;
 static const char* address     = NULL;
 
@@ -41,19 +43,65 @@ static void LaunchClient() {
 	log_callback(GLB_LOG_INFO, "Launching client");
 
 	glbcfg_t config = {};
-	config.ip       = "127.0.0.1"; // TODO: parse from address
-	config.port     = 12345;
-	config.flags    = 0;
-	config.alloc    = &allocator;
-	config.log      = &logger;
+	config.ip = "127.0.0.1"; // TODO: parse from address
+	config.port = 12345;
+	config.flags = 0;
+	config.alloc = &allocator;
+	config.log = &logger;
 	config.channel_count = 2;
 	config.channels = channels;
 
 	// Make context
 	glbctx_t* ctx = glb_create(&config);
 
-	// Do nothing
+	glbconn_t* connection = glb_connect(ctx);
+	if (!connection) {
+		log_callback(GLB_LOG_ERROR, "Failed to connect to server!");
+		goto exit;
+	}
 
+	const char* msg = "Client hello";
+	glbsendinfo_t send_info = {};
+	send_info.data = msg;
+	send_info.len = strlen(msg);
+	send_info.conn = connection;
+	send_info.channel_id = 1;
+	int result = glb_send(ctx, &send_info);
+	if (result != GLB_SUCCESS) {
+		log_callback(GLB_LOG_ERROR, "Failed to send data to server!");
+	}
+
+	char recv_buffer[1024];
+
+	// Force gilberta to process the send queue and handle incoming packets (e.g. connection ack, etc.)
+	while (true) {
+
+		int result = glb_tick(ctx);
+		if (result != GLB_SUCCESS) {
+			log_callback(GLB_LOG_ERROR, "Failed to tick context!");
+			break;
+		}
+
+		glbrecvinfo_t recv_info = {};
+		recv_info.buffer = recv_buffer;
+		recv_info.buflen = sizeof(recv_buffer);
+		result = glb_recv(ctx, &recv_info);
+		if (result == GLB_SUCCESS) {
+			log_callback(GLB_LOG_INFO, "Received data from server:");
+			printf("  Channel: %d\n", recv_info.channel_id);
+			printf("  Data: %.*s\n", (int)recv_info.datalen, (char*)recv_info.buffer);
+			break;
+		}
+		else if (result == GLB_ERROR_CONNECTION_CLOSED) {
+			log_callback(GLB_LOG_INFO, "Connection closed by server!");
+			break;
+		}
+
+	}
+
+	glb_close(connection);
+
+exit:
 	// Free context
 	glb_destroy(ctx);
 }
@@ -73,7 +121,72 @@ static void LaunchServer() {
 	// Make context
 	glbctx_t* ctx = glb_create(&config);
 
-	// Do nothing
+	std::vector<glbconn_t*> connections;
+
+	log_callback(GLB_LOG_INFO, "Waiting for connections...");
+	while (true) {
+
+		// Handle new connection
+		glbconn_t* connection = glb_accept(ctx);
+		if (connection) {
+			log_callback(GLB_LOG_INFO, "Accepted new connection!");
+			connections.push_back(connection);
+		}
+
+		glbconn_t* closeconn = NULL;
+
+		// Send data t o clients
+		for (glbconn_t* conn : connections) {
+			const char* msg = "Hello from server!";
+			glbsendinfo_t send_info = {};
+			send_info.conn = conn;
+			send_info.data = msg;
+			send_info.len = strlen(msg);
+			send_info.channel_id = 1; // send on channel 1 (reliable)
+			int result = glb_send(ctx, &send_info);
+			if (result != GLB_SUCCESS) {
+				log_callback(GLB_LOG_ERROR, "Failed to send data to client!");
+			}
+			if (result == GLB_ERROR_CONNECTION_CLOSED) {
+				log_callback(GLB_LOG_INFO, "Connection closed!");
+				closeconn = conn;
+			}
+		}
+		
+		auto it = connections.begin();
+		for (; it != connections.end(); it++) {
+			if (*it == closeconn) {
+
+				// Remove connection from list (swap with last element and pop back)
+				*it = std::move(connections.back());
+				connections.pop_back();
+
+				// Close connection in gilberta
+				glb_close(closeconn);
+				break;
+			}
+		}
+
+		// Update gilberta (handle incoming packets, timeouts, etc.)
+
+		glb_tick(ctx);
+
+		// Receive data from clients
+		char recv_buffer[1024];
+		for (glbconn_t* conn : connections) {
+			glbrecvinfo_t recv_info = {};
+			recv_info.buffer = recv_buffer;
+			recv_info.buflen = sizeof(recv_buffer);
+			int result = glb_recv(ctx, &recv_info);
+			if (result == GLB_SUCCESS) {
+				log_callback(GLB_LOG_INFO, "Received data from client:");
+				printf("  Channel: %d\n", recv_info.channel_id);
+				printf("  Data: %.*s\n", (int)recv_info.datalen, (char*)recv_info.buffer);
+			}
+			//else if (result != GLB_ERROR_NO_DATA) {
+			//	log_callback(GLB_LOG_ERROR, "Failed to receive data from client!");
+		}
+	}
 
 	// Free context
 	glb_destroy(ctx);
