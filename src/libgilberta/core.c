@@ -8,7 +8,7 @@
 #include <ws2tcpip.h>
 #pragma comment(lib, "ws2_32.lib")
 typedef SOCKET GSocketHandle;
-const GSocketHandle SOCKET_NULL_HANDLE = INVALID_SOCKET;
+static const GSocketHandle SOCKET_NULL_HANDLE = INVALID_SOCKET;
 static int winsock_usage = 0;
 // logger is NOT a NULL pointer, guaranteed by glb_create() and glb_destroy() preconditions
 // TODO: Use atomic operations for winsock_usage to avoid race conditions
@@ -43,24 +43,21 @@ static void GWinSockDestroy(GLBLogFunc logger) {
 #include <fcntl.h>
 #include <unistd.h>
 typedef int GSocketHandle;
-const GSocketHandle SOCKET_NULL_HANDLE = -1;
+static const GSocketHandle SOCKET_NULL_HANDLE = -1;
 #define GLB_INIT_WINSOCK
 #define GLB_DESTROY_WINSOCK
 #else
 #error "[gilberta] Unsupported platform"
 #endif
-/*
-typedef struct AddrV4 {
-	uint32_t addr;
-	uint16_t port;
-	uint16_t _offset;
-} AddrV4;
-*/
 
 struct glbctx_t {
 	GSocketHandle sock;
 	glballoc_t    allocator;
 	GLBLogFunc    logger;
+};
+
+struct glbconn_t {
+	uint32_t _padding;
 };
 
 static void GLB_DefaultLogger(GLBLogLevel level, const char* message) {
@@ -149,6 +146,21 @@ int glb_destroy(glbctx_t* ctx) {
 	ctx->allocator.free(ctx);
 
 	return GLB_SUCCESS;
+}
+
+glbconn_t* glb_accept(glbctx_t* ctx) {
+	// TODO: Not implemented yet
+	return NULL;
+}
+
+glbconn_t* glb_connect(glbctx_t* ctx) {
+	// TODO: Not implemented yet
+	return NULL;
+}
+
+int glb_close(glbconn_t* conn) {
+	// TODO: Not implemented yet
+	return GLB_ERROR_UNKNOWN;
 }
 
 int glb_send(glbctx_t* ctx, glbsendinfo_t* info) {

@@ -41,6 +41,7 @@ typedef enum GLBErrorCode {
 	GLB_ERROR_INVALID_ARGUMENT,
 	GLB_ERROR_SOCKET_CREATION,
 	GLB_ERROR_SOCKET_BINDING,
+	GLB_ERROR_CONNECTION_CLOSED,
 	GLB_ERROR_SEND_FAILED,
 	GLB_ERROR_RECV_FAILED,
 	GLB_ERROR_UNKNOWN
@@ -50,7 +51,8 @@ typedef enum GLBErrorCode {
 
 #define GLB_CHANNEL_FLAG_RELIABLE 0x01 // reliable delivery (retransmission, ordering)
 
-typedef struct glbctx_t glbctx_t;
+typedef struct glbctx_t glbctx_t;   // Opaque context structure
+typedef struct glbconn_t glbconn_t; // Opaque connection structure
 
 typedef void* (*GLBMalloc)(size_t);
 typedef void  (*GLBFree)(void*);
@@ -90,14 +92,17 @@ typedef struct glbcfg_t {
 typedef struct glbsendinfo_t {
 	const void* data;
 	size_t      len;
+	glbconn_t*  conn;
 	uint8_t     channel_id;
 } glbsendinfo_t;
 
 typedef struct glbrecvinfo_t {
 	void*  buffer;
 	size_t buflen;
-	size_t datalen;     // set by the library to indicate how much data was received
-	uint8_t channel_id; // set by the library to indicate which channel the received data belongs to
+	// Set by the library when data is received:
+	glbconn_t* conn;    // indicate which connection the received data belongs to
+	size_t datalen;     // indicate how much data was received
+	uint8_t channel_id; // indicate which channel the received data belongs to
 } glbrecvinfo_t;
 
 #ifdef __cplusplus
@@ -107,11 +112,15 @@ extern "C" {
 GLB_DECLSPEC glbctx_t* glb_create(const glbcfg_t* config);
 GLB_DECLSPEC int glb_destroy(glbctx_t* ctx);
 
-// Push data to send queue
-GLB_DECLSPEC int glb_send(glbctx_t* ctx, glbsendinfo_t* info);
+GLB_DECLSPEC glbconn_t* glb_accept(glbctx_t* ctx);  // Accept incoming connection (server mode)
+GLB_DECLSPEC glbconn_t* glb_connect(glbctx_t* ctx); // Connect to server
 
-// Pop data from receive queue
-GLB_DECLSPEC int glb_recv(glbctx_t* ctx, glbrecvinfo_t* info);
+GLB_DECLSPEC int glb_close(glbconn_t* conn);        // Close a connection
+
+//GLB_DECLSPEC int glb_get // TODO: Add function to get connection info (e.g. remote address, latency, etc.)
+
+GLB_DECLSPEC int glb_send(glbctx_t* ctx, glbsendinfo_t* info); // Push data to send queue
+GLB_DECLSPEC int glb_recv(glbctx_t* ctx, glbrecvinfo_t* info); // Pop data from receive queue
 
 // Call this function every frame to update internal state (send, receive and process data)
 GLB_DECLSPEC int glb_tick(glbctx_t* ctx);
