@@ -1,19 +1,12 @@
-﻿#define DLL_EXPORT
-#include "libgilberta.h"
-#include <stdlib.h>
+#define DLL_EXPORT
+#include "context.h"
 #include <stdio.h>
 
 #if defined(GILBERTA_WINDOWS)
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#pragma comment(lib, "ws2_32.lib")
-typedef SOCKET GSocketHandle;
-static const GSocketHandle SOCKET_NULL_HANDLE = INVALID_SOCKET;
-static int winsock_usage = 0;
 // logger is NOT a NULL pointer, guaranteed by glb_create() and glb_destroy() preconditions
 // TODO: Use atomic operations for winsock_usage to avoid race conditions
 //   Or add a mutex to protect winsock_usage in multithreaded scenarios
-static void GWinSockInit(GLBLogFunc logger) {
+void GWinSockInit(GLBLogFunc logger) {
 	if (winsock_usage == 0) {
 		logger(GLB_LOG_INFO, "[gilberta] Initializing Winsock...");
 		WSADATA wsaData;
@@ -34,39 +27,15 @@ static void GWinSockDestroy(GLBLogFunc logger) {
 		WSACleanup();
 	}
 }
-#define GLB_INIT_WINSOCK    GWinSockInit
-#define GLB_DESTROY_WINSOCK GWinSockDestroy
-#elif defined(GILBERTA_POSIX)
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <fcntl.h>
-#include <unistd.h>
-typedef int GSocketHandle;
-static const GSocketHandle SOCKET_NULL_HANDLE = -1;
-#define GLB_INIT_WINSOCK
-#define GLB_DESTROY_WINSOCK
-#else
-#error "[gilberta] Unsupported platform"
 #endif
-
-struct glbctx_t {
-	GSocketHandle sock;
-	glballoc_t    allocator;
-	GLBLogFunc    logger;
-};
-
-struct glbconn_t {
-	uint32_t _padding;
-};
 
 static void GLB_DefaultLogger(GLBLogLevel level, const char* message) {
 	const char* level_str = "";
 	switch (level) {
-		case GLB_LOG_INFO:  level_str = "**"; break;
-		case GLB_LOG_WARN:  level_str = "!!"; break;
-		case GLB_LOG_ERROR: level_str = "@@"; break;
-		case GLB_LOG_DEBUG: level_str = "DD"; break;
+	case GLB_LOG_INFO:  level_str = "**"; break;
+	case GLB_LOG_WARN:  level_str = "!!"; break;
+	case GLB_LOG_ERROR: level_str = "@@"; break;
+	case GLB_LOG_DEBUG: level_str = "DD"; break;
 	}
 	printf("%s [glb logger] %s\n", level_str, message);
 }
@@ -130,6 +99,10 @@ glbctx_t* glb_create(const glbcfg_t* config) {
 			ctx->allocator.free(ctx);
 			return NULL;
 		}
+
+		// Initialize system queues for server mode
+		ctx->sys_send = glbqueue_init(ctx, sizeof(glbpkgheader), 128);
+		ctx->sys_recv = glbqueue_init(ctx, sizeof(glbpkgheader), 128);
 	}
 
 	ctx->logger(GLB_LOG_INFO, "[gilberta] Context created.");
@@ -139,6 +112,9 @@ glbctx_t* glb_create(const glbcfg_t* config) {
 int glb_destroy(glbctx_t* ctx) {
 	if (!ctx) return GLB_ERROR_INVALID_ARGUMENT;
 
+	glbqueue_free(ctx->sys_send);
+	glbqueue_free(ctx->sys_recv);
+
 	GLB_CloseSocket(ctx);
 
 	ctx->logger(GLB_LOG_INFO, "[gilberta] Context destroyed.");
@@ -146,34 +122,4 @@ int glb_destroy(glbctx_t* ctx) {
 	ctx->allocator.free(ctx);
 
 	return GLB_SUCCESS;
-}
-
-glbconn_t* glb_accept(glbctx_t* ctx) {
-	// TODO: Not implemented yet
-	return NULL;
-}
-
-glbconn_t* glb_connect(glbctx_t* ctx) {
-	// TODO: Not implemented yet
-	return NULL;
-}
-
-int glb_close(glbconn_t* conn) {
-	// TODO: Not implemented yet
-	return GLB_ERROR_UNKNOWN;
-}
-
-int glb_send(glbctx_t* ctx, glbsendinfo_t* info) {
-	// TODO: Not implemented yet
-	return GLB_ERROR_UNKNOWN;
-}
-
-int glb_recv(glbctx_t* ctx, glbrecvinfo_t* info) {
-	// TODO: Not implemented yet
-	return GLB_ERROR_UNKNOWN;
-}
-
-int glb_tick(glbctx_t* ctx) {
-	// TODO: Not implemented yet
-	return GLB_ERROR_UNKNOWN;
 }

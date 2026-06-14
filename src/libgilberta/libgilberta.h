@@ -14,6 +14,20 @@
 * 
 */
 
+/*
+* 
+* Protocol design:
+* 
+* [Header]
+*  uint16_t magic		// Magic number to identify gilberta packets
+*  uint8_t  version		// Protocol version
+*  uint8_t  channel_id	// Channel ID (0-255)
+*  uint16_t payload_len	// Length of the payload data
+*  uint8_t  flags		// Flags for message control
+*  uint8_t  status      // CONNECT_REQUEST / ACK / SYN_ACK / etc
+* 
+*/
+
 #include <stdint.h>
 
 
@@ -38,13 +52,17 @@ typedef enum GLBLogLevel {
 
 typedef enum GLBErrorCode {
 	GLB_SUCCESS = 0,
+	GLB_ERROR_UNKNOWN,
 	GLB_ERROR_INVALID_ARGUMENT,
+	GLB_ERROR_OUT_OF_MEMORY,
+	GLB_ERROR_QUEUE_FULL,
+	GLB_ERROR_QUEUE_EMPTY,
+	GLB_ERROR_MESSAGE_TOO_LONG,
 	GLB_ERROR_SOCKET_CREATION,
 	GLB_ERROR_SOCKET_BINDING,
 	GLB_ERROR_CONNECTION_CLOSED,
 	GLB_ERROR_SEND_FAILED,
-	GLB_ERROR_RECV_FAILED,
-	GLB_ERROR_UNKNOWN
+	GLB_ERROR_RECV_FAILED
 } GLBErrorCode;
 
 #define GLB_FLAG_BIND_PORT 0x01 // bind to the specified port (server mode)
