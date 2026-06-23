@@ -24,8 +24,10 @@
 *  uint8_t  channel_id	// Channel ID (0-255)
 *  uint16_t payload_len	// Length of the payload data
 *  uint8_t  flags		// Flags for message control
-*  uint8_t  status      // CONNECT_REQUEST / ACK / SYN_ACK / etc
-* 
+*  uint8_t  ctrlflags   // ACK / SYN / etc
+*  uint16_t client_gen; // 0
+*  uint16_t client_id;  // 0 (0xFFFF for initiate connection)
+*  uint32_t reserved;   // 0
 */
 
 #include <stdint.h>
@@ -69,6 +71,15 @@ typedef enum GLBErrorCode {
 
 #define GLB_CHANNEL_FLAG_RELIABLE 0x01 // reliable delivery (retransmission, ordering)
 
+#define GLB_CTRL_FLAG_SYN  0x01
+#define GLB_CTRL_FLAG_ACK  0x02
+#define GLB_CTRL_FLAG_PING 0x04
+#define GLB_CTRL_FLAG_PONG 0x08
+#define GLB_CTRL_FLAG_RES1 0x10 // RESERVED
+#define GLB_CTRL_FLAG_RES2 0x20 // RESERVED
+#define GLB_CTRL_FLAG_FIN  0x40
+#define GLB_CTRL_FLAG_RST  0x80
+
 typedef struct glbctx_t glbctx_t;   // Opaque context structure
 typedef struct glbconn_t glbconn_t; // Opaque connection structure
 
@@ -100,13 +111,26 @@ typedef struct glbcfg_t {
 	uint16_t    port;
 	uint8_t     flags;
 	uint8_t     channel_count;
-	uint32_t    padding1; // reserved for future use
+	uint16_t    eventqueue_length;
+	uint16_t    padding1; // reserved for future use
 	glballoc_t* alloc;
 	glblog_t*   log;
 	glbchan_t*  channels;
 } glbcfg_t;
 
-// TODO: Add client identification
+typedef enum glb_event_type_t {
+	GLB_EVENT_NONE = 0,
+	GLB_EVENT_CONNECT,
+	GLB_EVENT_DISCONNECT,
+	GLB_EVENT_RECIEVE,
+	GLB_EVENT_ERROR,
+} glb_event_type_t;
+
+typedef struct glbevent_t {
+	glb_event_type_t type;
+
+} glbevent_t;
+
 typedef struct glbsendinfo_t {
 	const void* data;
 	size_t      len;
@@ -114,6 +138,7 @@ typedef struct glbsendinfo_t {
 	uint8_t     channel_id;
 } glbsendinfo_t;
 
+#if 0
 typedef struct glbrecvinfo_t {
 	void*  buffer;
 	size_t buflen;
@@ -122,10 +147,15 @@ typedef struct glbrecvinfo_t {
 	size_t datalen;     // indicate how much data was received
 	uint8_t channel_id; // indicate which channel the received data belongs to
 } glbrecvinfo_t;
+#endif
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#if 0
+
+GLB_DECLSPEC int glb_geterror(glbctx_t* ctx);
 
 GLB_DECLSPEC glbctx_t* glb_create(const glbcfg_t* config);
 GLB_DECLSPEC int glb_destroy(glbctx_t* ctx);
@@ -135,13 +165,29 @@ GLB_DECLSPEC glbconn_t* glb_connect(glbctx_t* ctx); // Connect to server
 
 GLB_DECLSPEC int glb_close(glbconn_t* conn);        // Close a connection
 
-//GLB_DECLSPEC int glb_get // TODO: Add function to get connection info (e.g. remote address, latency, etc.)
+//GLB_DECLSPEC int glb_getconnectioninfo(glbconn_t* conn); // TODO: Add function to get connection info (e.g. remote address, latency, etc.)
 
 GLB_DECLSPEC int glb_send(glbctx_t* ctx, glbsendinfo_t* info); // Push data to send queue
 GLB_DECLSPEC int glb_recv(glbctx_t* ctx, glbrecvinfo_t* info); // Pop data from receive queue
 
 // Call this function every frame to update internal state (send, receive and process data)
 GLB_DECLSPEC int glb_tick(glbctx_t* ctx);
+
+#else
+
+GLB_DECLSPEC int glb_geterror(glbctx_t* ctx);
+
+GLB_DECLSPEC glbctx_t* glb_create(const glbcfg_t* config);
+GLB_DECLSPEC int glb_destroy(glbctx_t* ctx);
+
+GLB_DECLSPEC int glb_connect(glbctx_t* ctx); // Connect to server
+GLB_DECLSPEC int glb_close(glbconn_t* conn); // Close a connection
+
+GLB_DECLSPEC int glb_send(glbctx_t* ctx, glbsendinfo_t* info); // Push data to send queue
+
+GLB_DECLSPEC int glb_pollevent(glbctx_t* ctx, glbevent_t* event);
+
+#endif
 
 #ifdef __cplusplus
 }

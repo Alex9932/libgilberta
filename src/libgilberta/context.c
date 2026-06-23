@@ -44,8 +44,27 @@ static int GLB_CreateSocket(glbctx_t* ctx, const glbcfg_t* config) {
 	ctx->sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	if (ctx->sock == SOCKET_NULL_HANDLE) {
 		ctx->logger(GLB_LOG_ERROR, "[gilberta] Failed to create socket.");
+		ctx->error = GLB_ERROR_SOCKET_CREATION;
 		return GLB_ERROR_SOCKET_CREATION;
 	}
+
+	// Set non blocking
+#if defined(GILBERTA_WINDOWS)
+	ULONG mode = 1;
+	if (ioctlsocket(ctx->sock, FIONBIO, &mode)) {
+		ctx->logger(GLB_LOG_ERROR, "[gilberta] Failed to set non-blocking mode.");
+		ctx->error = GLB_ERROR_SOCKET_CREATION;
+		return GLB_ERROR_SOCKET_CREATION;
+	}
+#else
+	int flags = fcntl(ctx->sock, F_GETFL, 0);
+	if (flags < 0 || fcntl(ctx->sock, F_SETFL, flags | O_NONBLOCK) < 0) {
+		ctx->logger(GLB_LOG_ERROR, "[gilberta] Failed to set non-blocking mode.");
+		ctx->error = GLB_ERROR_SOCKET_CREATION;
+		return GLB_ERROR_SOCKET_CREATION;
+	}
+#endif
+
 	return GLB_SUCCESS;
 }
 
@@ -68,9 +87,14 @@ static int GLB_BindSocket(glbctx_t* ctx, const glbcfg_t* config) {
 	ctx->logger(GLB_LOG_INFO, logbuf);
 	if (bind(ctx->sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
 		ctx->logger(GLB_LOG_ERROR, "[gilberta] Failed to bind socket.");
+		ctx->error = GLB_ERROR_SOCKET_BINDING;
 		return GLB_ERROR_SOCKET_BINDING;
 	}
 	return GLB_SUCCESS;
+}
+
+int glb_geterror(glbctx_t* ctx) {
+	return ctx->error;
 }
 
 glbctx_t* glb_create(const glbcfg_t* config) {
@@ -87,6 +111,7 @@ glbctx_t* glb_create(const glbcfg_t* config) {
 	ctx->allocator.malloc = config->alloc->malloc;
 	ctx->allocator.free = config->alloc->free;
 	ctx->logger = logger;
+	//memset(ctx->pending, 0, sizeof(ctx->pending));
 
 	if (GLB_CreateSocket(ctx, config) != GLB_SUCCESS) {
 		ctx->allocator.free(ctx);
@@ -100,20 +125,19 @@ glbctx_t* glb_create(const glbcfg_t* config) {
 			return NULL;
 		}
 
-		// Initialize system queues for server mode
-		ctx->sys_send = glbqueue_init(ctx, sizeof(glbpkgheader), 128);
-		ctx->sys_recv = glbqueue_init(ctx, sizeof(glbpkgheader), 128);
+		// Initialize system queue, use 1024 by default
+		ctx->eventqueue = glbqueue_init(ctx, sizeof(glbevent_t), config->eventqueue_length == 0 ? 1024 : config->eventqueue_length);
 	}
 
 	ctx->logger(GLB_LOG_INFO, "[gilberta] Context created.");
+	ctx->error = GLB_SUCCESS;
 	return ctx;
 }
 
 int glb_destroy(glbctx_t* ctx) {
 	if (!ctx) return GLB_ERROR_INVALID_ARGUMENT;
 
-	glbqueue_free(ctx->sys_send);
-	glbqueue_free(ctx->sys_recv);
+	glbqueue_free(ctx->eventqueue);
 
 	GLB_CloseSocket(ctx);
 
@@ -122,4 +146,10 @@ int glb_destroy(glbctx_t* ctx) {
 	ctx->allocator.free(ctx);
 
 	return GLB_SUCCESS;
+}
+
+void glbctx_generateclientid(glbctx_t* ctx, glbconid_t* dst) {
+	// TODO
+	dst->generation = 0;
+	dst->id = 0;
 }
