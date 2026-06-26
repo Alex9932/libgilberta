@@ -182,4 +182,4 @@ Issues and pull requests are welcome on [GitHub](https://github.com/Alex9932/lib
 
 - The developers of *Arknights: Endfield* — for the character who inspired the library's name.
 - [Premake](https://premake.github.io/) for build system generation.
-- Inspired by Enet.
+- Event system inspired by SDL/Enet.
