@@ -1,3 +1,16 @@
+/*
+ * Gilberta – Real-time Communication Library
+ * SPDX-License-Identifier: MIT
+ * Copyright (c) 2026 Alex9932
+ *
+ * Module:    queue.c
+ * Purpose:   Queue implementation with fixed capacity.
+ *
+ * This file is part of the Gilberta library.
+ * See the main header (gilberta.h) for the public API and protocol design.
+ *
+ */
+
 #include "queue.h"
 #include "context.h"
 
