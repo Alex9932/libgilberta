@@ -67,6 +67,7 @@ static void LaunchClient() {
 
 	// Force gilberta to process the send queue and handle incoming packets (e.g. connection ack, etc.)
 	while (true) {
+		glb_tick(ctx);
 		glbevent_t event;
 		while (glb_pollevent(ctx, &event)) {
 			switch (event.type) {
@@ -138,6 +139,7 @@ static void LaunchServer() {
 	config.flags    = GLB_FLAG_BIND_PORT;
 	config.alloc    = &allocator;
 	config.log      = &logger;
+	config.max_connections = 16;
 	config.channel_count = 2;
 	config.channels = channels;
 
@@ -148,6 +150,7 @@ static void LaunchServer() {
 
 	log_callback(GLB_LOG_INFO, "Waiting for connections...");
 	while (true) {
+		glb_tick(ctx);
 
 		glbevent_t event;
 		while (glb_pollevent(ctx, &event)) {
@@ -234,6 +237,23 @@ static void LaunchServer() {
 
 int main(int argc, char** argv) {
 
+#if 0
+	static uint16_t crc16_table[256];
+	printf("static uint16_t crc16_table[256] = {");
+	for (int i = 0; i < 256; i++) {
+		uint16_t crc = i;
+		for (int j = 0; j < 8; j++) {
+			if (crc & 1)
+				crc = (crc >> 1) ^ 0xA001; // 0xA001 = reversed 0x8005
+			else
+				crc >>= 1;
+		}
+		crc16_table[i] = crc;
+		printf(" 0x%.4x,", crc);
+		if(i % 8 == 7) printf("\n");
+	}
+	printf(" };\n");
+#endif
 	log_callback(GLB_LOG_INFO, "Process args");
 	if (ProcessArgs(argc, argv)) {
 		log_callback(GLB_LOG_INFO, "Invalid args!");

@@ -85,20 +85,22 @@ int main() {
 
     glbctx_t* ctx = glb_create(&cfg);
     if (!ctx) return 1;
-
-    glbevent_t ev;
-    while (glb_pollevent(ctx, &ev)) {
-        switch (ev.type) {
-            case GLB_EVENT_CONNECT:
-                puts("New connection");
-                break;
-            case GLB_EVENT_RECIEVE:
-                printf("Received %zu bytes\n", ev.recieve.length);
-                break;
-            case GLB_EVENT_DISCONNECT:
-                puts("Disconnected");
-                break;
-            default: break;
+    while(1) {
+        glb_tick(ctx);
+        glbevent_t ev;
+        while (glb_pollevent(ctx, &ev)) {
+            switch (ev.type) {
+                case GLB_EVENT_CONNECT:
+                    puts("New connection");
+                    break;
+                case GLB_EVENT_RECIEVE:
+                    printf("Received %zu bytes\n", ev.recieve.length);
+                    break;
+                case GLB_EVENT_DISCONNECT:
+                    puts("Disconnected");
+                    break;
+                default: break;
+            }
         }
     }
 
@@ -138,10 +140,14 @@ int main() {
     // poll events...
     glbevent_t ev;
     int connected = 0;
-    while (!connected && glb_pollevent(ctx, &ev) == 0) {
-        if (ev.type == GLB_EVENT_CONNECT) {
-            connected = 1;
-            break;
+    
+    while(!connected) {
+        glb_tick(ctx);
+        while (!connected && glb_pollevent(ctx, &ev) == 0) {
+            if (ev.type == GLB_EVENT_CONNECT) {
+                connected = 1;
+                break;
+            }
         }
     }
 
