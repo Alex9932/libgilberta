@@ -26,6 +26,9 @@ static const GSocketHandle SOCKET_NULL_HANDLE = -1;
 // Maximum Transmission Unit for UDP packets (w/o headers)
 #define GILBERTA_MTU 1024
 
+#define GILBERTA_PROTO_MAGIC 0x4247 // 'GB'
+#define GILBERTA_PROTO_VERSION 1
+
 typedef struct sockaddr_in glbaddr_t;
 
 typedef struct glbconid_t {

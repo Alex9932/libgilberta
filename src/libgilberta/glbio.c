@@ -83,9 +83,9 @@ int glbio_read(glbctx_t* ctx, glbpkg* pkg, int* recvd, struct sockaddr* from_add
 		return GLB_ERROR_RECV_FAILED;
 	}
 
-	if (pkg->header.magic != 0x4247) { // "GB"
-		ctx->logger(GLB_LOG_WARN, "UNKNOWN PACKED RECIEVED");
-		return GLB_ERROR_RECV_FAILED; // Invalid magic
+	if (pkg->header.magic != GILBERTA_PROTO_MAGIC || pkg->header.version != GILBERTA_PROTO_VERSION) {
+		ctx->logger(GLB_LOG_WARN, "INVALID PACKED RECIEVED");
+		return GLB_ERROR_RECV_FAILED; // Invalid magic or version
 	}
 
 	if (pkg->header.checksum != crc16_modbus_fast(pkg->data, pkg->header.payload_len)) {

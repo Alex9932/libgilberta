@@ -17,11 +17,40 @@
 #include "queue.h"
 #include "timer.h"
 
-// 47 42 00 00 01 00 00 01 00 00 FF FF FF FF 00 00 00 00 00 00 00 00 00 00
-// 47 42 00 00 01 00 00 02 00 00 00 00 FF FF 00 00 00 00 00 00 00 00 00 00
+// For debug:
+// DL  - Data length (payload length)
+// V   - Version
+// C   - Channel
+// CF  - Channel flags
+// F   - Control flags
+// CG  - Client generation
+// CID - Client ID
+// CHK - CRC16 checksum
+// WND - Window size
+// SEQ - Sequence number
+// ACK - Acknowledgment number
+// 
+//                        "GB"  DL    V  C  CF F  CG    CID   CHK   WND   SEQ         ACK
+// Client -> server (SYN) 47 42 00 00 01 00 00 01 00 00 FF FF FF FF 00 00 00 00 00 00 00 00 00 00
+// Client -> server (ACK) 47 42 00 00 01 00 00 02 00 00 00 00 FF FF 00 00 00 00 00 00 00 00 00 00
 
 #define GLB_MAX_RETRY     5   // times
 #define GLB_RETRY_TIMEOUT 1000 // ms
+
+static void glbpkg_init(glbpkg* pkg, glbconid_t conn_id, uint8_t ctrl_flags) {
+	pkg->header.magic       = GILBERTA_PROTO_MAGIC;
+	pkg->header.payload_len = 0;
+	pkg->header.version     = GILBERTA_PROTO_VERSION;
+	pkg->header.channel_id  = 0;
+	pkg->header.chan_flags  = 0;
+	pkg->header.ctrl_flags  = ctrl_flags;
+	pkg->header.client_gen  = conn_id.generation;
+	pkg->header.client_id   = conn_id.id;
+	pkg->header.checksum    = 0xFFFF;
+	pkg->header.wnd = 0;
+	pkg->header.seq = 0;
+	pkg->header.ack = 0;
+}
 
 int glb_geterror(glbctx_t* ctx) {
 	return ctx->error;
@@ -153,17 +182,8 @@ int glb_tick(glbctx_t* ctx) {
 			con->conn_id.generation = headerptr->client_gen;
 			con->conn_id.id = headerptr->client_id;
 			//glbtime_start(&con->time, 0);
-			pkg.header.magic = 0x4247;
-			pkg.header.payload_len = 0;
-			pkg.header.version = 1;
-			pkg.header.channel_id = 0;
-			pkg.header.chan_flags = 0;
-			pkg.header.ctrl_flags = GLB_CTRL_FLAG_ACK;
-			pkg.header.client_gen = con->conn_id.generation;
-			pkg.header.client_id  = con->conn_id.id;
-			pkg.header.wnd = 0x0000;
-			pkg.header.seq = 0x00000000;
-			pkg.header.ack = 0x00000000;
+
+			glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_ACK);
 			if (glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, &addr_len) == GLB_SUCCESS) {
 				con->state = GLB_CONNECTION_ESTABLISHED;
 			}
@@ -179,20 +199,11 @@ int glb_tick(glbctx_t* ctx) {
 		if (con->state == GLB_CONNECTION_SYN_SENT && glbtime_isexpired(&con->time)) {
 			if (con->retry >= GLB_MAX_RETRY) {
 				// Forget this connection
-				con->state == GLB_CONNECTION_CLOSED;
+				con->state = GLB_CONNECTION_CLOSED;
 				continue;
 			}
-			pkg.header.magic = 0x4247;
-			pkg.header.payload_len = 0;
-			pkg.header.version = 1;
-			pkg.header.channel_id = 0;
-			pkg.header.chan_flags = 0;
-			pkg.header.ctrl_flags = GLB_CTRL_FLAG_SYN;
-			pkg.header.client_gen = con->conn_id.generation;
-			pkg.header.client_id  = con->conn_id.id;
-			pkg.header.wnd = 0x0000;
-			pkg.header.seq = 0x00000000;
-			pkg.header.ack = 0x00000000;
+
+			glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_SYN);
 			glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, &addr_len);
 			// And start new timer
 			glbtime_start(&con->time, GLB_RETRY_TIMEOUT * (con->retry + 1));
@@ -203,20 +214,12 @@ int glb_tick(glbctx_t* ctx) {
 		if (con->state == GLB_CONNECTION_SYN_RCVD && glbtime_isexpired(&con->time)) {
 			if (con->retry >= GLB_MAX_RETRY) {
 				// Forget this connection
-				con->state == GLB_CONNECTION_CLOSED;
+				con->state = GLB_CONNECTION_CLOSED;
 				continue;
 			}
-			pkg.header.magic = 0x4247;
-			pkg.header.payload_len = 0;
-			pkg.header.version = 1;
-			pkg.header.channel_id = 0;
-			pkg.header.chan_flags = 0;
-			pkg.header.ctrl_flags = GLB_CTRL_FLAG_SYN | GLB_CTRL_FLAG_ACK;
-			pkg.header.client_gen = con->conn_id.generation;
-			pkg.header.client_id  = con->conn_id.id;
-			pkg.header.wnd = 0x0000;
-			pkg.header.seq = 0x00000000;
-			pkg.header.ack = 0x00000000;
+
+			glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_SYN | GLB_CTRL_FLAG_ACK);
+
 			glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, &addr_len);
 			// And start new timer
 			glbtime_start(&con->time, GLB_RETRY_TIMEOUT * (con->retry + 1));
