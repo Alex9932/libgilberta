@@ -193,7 +193,7 @@ GLB_DECLSPEC int glb_close(glbconn_t* conn); // Close a connection
 GLB_DECLSPEC int glb_send(glbctx_t* ctx, glbsendinfo_t* info); // Push data to send queue
 
 GLB_DECLSPEC int glb_tick(glbctx_t* ctx);
-GLB_DECLSPEC int glb_pollevent(glbctx_t* ctx, glbevent_t* event); // Return count of unhandled events
+GLB_DECLSPEC int glb_pollevent(glbctx_t* ctx, glbevent_t* event); // Return GLB_SUCCESS if has event to process
 
 //GLB_DECLSPEC int glb_getconnectioninfo(glbconn_t* conn); // TODO: Add function to get connection info (e.g. remote address, latency, etc.)
 

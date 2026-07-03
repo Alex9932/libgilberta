@@ -5,6 +5,8 @@
 
 #include <vector>
 
+#define GLB_TEST_CLIENT 0
+
 static uint8_t     isClient    = 0;
 static const char* address     = NULL;
 
@@ -54,6 +56,7 @@ static void LaunchClient() {
 	// Make context
 	glbctx_t* ctx = glb_create(&config);
 
+	log_callback(GLB_LOG_INFO, "Connecting to the server...");
 	int res = glb_connect(ctx);
 	if (res != GLB_SUCCESS) {
 		log_callback(GLB_LOG_ERROR, "Failed to connect to server!");
@@ -69,13 +72,13 @@ static void LaunchClient() {
 	while (true) {
 		glb_tick(ctx);
 		glbevent_t event;
-		while (glb_pollevent(ctx, &event)) {
+		while (glb_pollevent(ctx, &event) == GLB_SUCCESS) {
 			switch (event.type) {
 				case GLB_EVENT_CONNECT: {
 					// Connected to the client
 					log_callback(GLB_LOG_INFO, "Connected! Sending message to the server...");
 
-					connection = NULL; // TODO: event.connect.connection
+					connection = event.connect.connection;
 
 					glbsendinfo_t send_info = {};
 					send_info.data = msg;
@@ -153,19 +156,19 @@ static void LaunchServer() {
 		glb_tick(ctx);
 
 		glbevent_t event;
-		while (glb_pollevent(ctx, &event)) {
+		while (glb_pollevent(ctx, &event) == GLB_SUCCESS) {
 			switch (event.type) {
 				case GLB_EVENT_CONNECT: {
 					// New client connected
 					log_callback(GLB_LOG_INFO, "Accepted new connection!");
-					connections.push_back(NULL); // TODO: event.connect.connection
+					connections.push_back(event.connect.connection);
 					break;
 				}
 				case GLB_EVENT_DISCONNECT: {
 					// Client disconnected
 					auto it = connections.begin();
 					for (; it != connections.end(); it++) {
-						if (*it == NULL) { // TODO: event.disconnect.connection
+						if (*it == event.disconnect.connection) {
 
 							// Remove connection from list (swap with last element and pop back)
 							*it = std::move(connections.back());
@@ -235,7 +238,21 @@ static void LaunchServer() {
 	glb_destroy(ctx);
 }
 
+#if GLB_TEST_CLIENT
+int _main(int argc, char** argv);
 int main(int argc, char** argv) {
+	int _argc = 3;
+	char* _argv[] = {
+		argv[0],
+		"-c",
+		"127.0.0.1"
+	};
+	return _main(_argc, _argv);
+}
+int _main(int argc, char** argv) {
+#else
+int main(int argc, char** argv) {
+#endif
 
 #if 0
 	static uint16_t crc16_table[256];
