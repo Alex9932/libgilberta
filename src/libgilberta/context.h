@@ -28,14 +28,13 @@ struct glbctx_t {
 	glbconn_t*    connections;
 	uint32_t      connection_count;
 
-	// TODO: Add data pool (array of blocks char[GILBERTA_MTU+sizeof(glbpkgheader)] )
-
 	// Last error
 	int           error;
 	
 	char     inet_addr[128];
 	uint16_t inet_port;
-	uint16_t padding0;
+	uint8_t  flags;
+	uint8_t  padding0;
 	uint32_t padding1;
 };
 

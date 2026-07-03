@@ -130,12 +130,18 @@ typedef enum glb_event_type_t {
 	GLB_EVENT_ERROR,
 } glb_event_type_t;
 
+typedef enum glb_disconnectreason_t {
+	GLB_DISCONNECT_BY_PEER,
+	GLB_DISCONNECT_TIMEOUT
+} glb_disconnectreason_t;
+
 typedef struct glbevent_connect_t {
 	glbconn_t* connection;
 } glbevent_connect_t;
 
 typedef struct glbevent_disconnect_t {
 	glbconn_t* connection;
+	glb_disconnectreason_t reason;
 } glbevent_disconnect_t;
 
 typedef struct glbevent_recieve_t {
@@ -146,10 +152,12 @@ typedef struct glbevent_recieve_t {
 
 typedef struct glbevent_t {
 	glb_event_type_t type;
+	uint32_t offset; // struct padding
 	union {
 		glbevent_connect_t    connect;
 		glbevent_disconnect_t disconnect;
 		glbevent_recieve_t    recieve;
+		char _raw[56];
 	};
 } glbevent_t;
 

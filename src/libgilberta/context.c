@@ -126,6 +126,7 @@ glbctx_t* glbctx_create(const glbcfg_t* config) {
 	ctx->allocator.malloc = config->alloc->malloc;
 	ctx->allocator.free = config->alloc->free;
 	ctx->logger = logger;
+	ctx->flags = config->flags;
 	ctx->connection_count = conns;
 	ctx->inet_port = config->port;
 	const char* ip = config->ip ? config->ip : "0.0.0.0";
@@ -148,10 +149,10 @@ glbctx_t* glbctx_create(const glbcfg_t* config) {
 			ctx->allocator.free(ctx);
 			return NULL;
 		}
-
-		// Initialize system queue, use 1024 by default
-		ctx->eventqueue = glbqueue_init(ctx, sizeof(glbevent_t), config->eventqueue_length == 0 ? 1024 : config->eventqueue_length);
 	}
+
+	// Initialize system queue, use 1024 by default
+	ctx->eventqueue = glbqueue_init(ctx, sizeof(glbevent_t), config->eventqueue_length == 0 ? 1024 : config->eventqueue_length);
 
 	ctx->logger(GLB_LOG_INFO, "[gilberta] Context created.");
 	ctx->error = GLB_SUCCESS;

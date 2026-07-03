@@ -58,9 +58,9 @@ uint16_t crc16_modbus_fast(const uint8_t* data, size_t len) {
 	return crc;
 }
 
-int glbio_send(glbctx_t* ctx, glbpkg* pkg, struct sockaddr* to_addr, int* addr_len) {
+int glbio_send(glbctx_t* ctx, glbpkg* pkg, struct sockaddr* to_addr, int addr_len) {
 	pkg->header.checksum = crc16_modbus_fast(pkg->data, pkg->header.payload_len);
-	int send_len = sendto(ctx->sock, pkg, sizeof(glbpkgheader) + pkg->header.payload_len, 0, to_addr, addr_len);
+	int send_len = sendto(ctx->sock, (const char*)pkg, sizeof(glbpkgheader) + pkg->header.payload_len, 0, to_addr, addr_len);
 
 	if (send_len != pkg->header.payload_len + sizeof(glbpkgheader)) {
 		ctx->error = GLB_ERROR_SEND_FAILED;
@@ -69,12 +69,16 @@ int glbio_send(glbctx_t* ctx, glbpkg* pkg, struct sockaddr* to_addr, int* addr_l
 
 	return GLB_SUCCESS;
 }
+
 int glbio_read(glbctx_t* ctx, glbpkg* pkg, int* recvd, struct sockaddr* from_addr, int* addr_len) {
-	int recv_len = recvfrom(ctx->sock, pkg, sizeof(glbpkg), 0, from_addr, addr_len);
+	int recv_len = recvfrom(ctx->sock, (char*)pkg, sizeof(glbpkg), 0, from_addr, addr_len);
 
 	if (recv_len < 0) {
 #if defined(GILBERTA_WINDOWS)
-		if (WSAGetLastError() == WSAEWOULDBLOCK) { *recvd = 0; return GLB_SUCCESS; }
+		int res = WSAGetLastError();
+		if (res == WSAEWOULDBLOCK) { *recvd = 0; return GLB_SUCCESS; }
+		// In client mode on connecting stage socket is not bound.
+		if (res == WSAEINVAL && !(ctx->flags & GLB_FLAG_BIND_PORT)) { *recvd = 0; return GLB_SUCCESS; }
 #else
 		if (errno == EAGAIN || errno == EWOULDBLOCK) { *recvd = 0; return GLB_SUCCESS; }
 #endif

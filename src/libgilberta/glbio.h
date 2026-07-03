@@ -65,8 +65,8 @@ typedef struct glbconn_t {
 #define GLB_CTRL_FLAG_ACK  0x02
 #define GLB_CTRL_FLAG_PING 0x04
 #define GLB_CTRL_FLAG_PONG 0x08
-#define GLB_CTRL_FLAG_RES1 0x10 // RESERVED
-#define GLB_CTRL_FLAG_RES2 0x20 // RESERVED
+#define GLB_CTRL_FLAG_DATA 0x10
+#define GLB_CTRL_FLAG_RES1 0x20 // RESERVED
 #define GLB_CTRL_FLAG_FIN  0x40
 #define GLB_CTRL_FLAG_RST  0x80
 
@@ -95,7 +95,7 @@ typedef struct glbpkg {
 } glbpkg;
 
 // Calculate checksum & send data
-int glbio_send(glbctx_t* ctx, glbpkg* pkg, struct sockaddr* to_addr, int* addr_len);
+int glbio_send(glbctx_t* ctx, glbpkg* pkg, struct sockaddr* to_addr, int addr_len);
 
 // Recieve data & check checksum
 int glbio_read(glbctx_t* ctx, glbpkg* pkg, int* recvd, struct sockaddr* from_addr, int* addr_len);
