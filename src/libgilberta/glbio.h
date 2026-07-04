@@ -51,6 +51,7 @@ typedef struct glbchannel_t {
 } glbchannel_t;
 
 typedef struct glbconn_t {
+	glbctx_t*  ctx;
 	glbaddr_t  peer_addr; // Real peer address (16 bytes in windows)
 	glbconid_t conn_id;   // Logical peer address (for peer identification after ip/nat changes)
 	uint8_t    state;

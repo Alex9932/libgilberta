@@ -326,4 +326,42 @@ int glb_pollevent(glbctx_t* ctx, glbevent_t* event) {
 	return GLB_ERROR_QUEUE_EMPTY;
 }
 
-//int glb_getconnectioninfo(glbconn_t* conn) {  }
+int glb_getconinfo(glbconn_t* con, glbconinfo_t* info) {
+	if (!con || !info) return GLB_ERROR_INVALID_ARGUMENT;
+
+	info->channel_count = con->ctx->channel_count;
+	info->state = con->state;
+	info->inet_port = ntohs(con->peer_addr.sin_port);
+	
+	// Convert IP address to string
+	inet_ntop(AF_INET, &con->peer_addr.sin_addr, info->inet_addr, sizeof(info->inet_addr));
+
+	return GLB_SUCCESS;
+}
+
+const char* glb_getstring(uint32_t code) {
+	switch (code) {
+		// Error codes
+		case GLB_SUCCESS:                 return "Success";
+		case GLB_ERROR_INVALID_ARGUMENT:  return "Invalid argument";
+		case GLB_ERROR_OUT_OF_MEMORY:     return "Out of memory";
+		case GLB_ERROR_QUEUE_FULL:        return "Queue full";
+		case GLB_ERROR_QUEUE_EMPTY:       return "Queue empty";
+		case GLB_ERROR_MESSAGE_TOO_LONG:  return "Message too long";
+		case GLB_ERROR_SOCKET_CREATION:   return "Socket creation failed";
+		case GLB_ERROR_SOCKET_BINDING:    return "Socket binding failed";
+		case GLB_ERROR_CONNECTION_CLOSED: return "Connection closed";
+		case GLB_ERROR_SEND_FAILED:       return "Send failed";
+		case GLB_ERROR_RECV_FAILED:       return "Receive failed";
+		// Disconnect reasons
+		case GLB_DISCONNECT_BY_PEER:      return "Disconnected by peer";
+		case GLB_DISCONNECT_TIMEOUT:      return "Disconnected by timeout";
+		// Events
+		case GLB_EVENT_CONNECT:           return "connect";
+		case GLB_EVENT_DISCONNECT:        return "disconnect";
+		case GLB_EVENT_RECIEVE:           return "receive";
+		case GLB_EVENT_ERROR:             return "error";
+
+		default: return "Unknown code";
+	}
+}

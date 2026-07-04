@@ -77,7 +77,8 @@ typedef enum GLBErrorCode {
 	GLB_ERROR_SOCKET_BINDING,
 	GLB_ERROR_CONNECTION_CLOSED,
 	GLB_ERROR_SEND_FAILED,
-	GLB_ERROR_RECV_FAILED
+	GLB_ERROR_RECV_FAILED,
+	GLB_ERROR_MAX_ENUM = 0x7F
 } GLBErrorCode;
 
 #define GLB_FLAG_BIND_PORT 0x01 // bind to the specified port (server mode)
@@ -122,18 +123,28 @@ typedef struct glbcfg_t {
 	glbchan_t*  channels;
 } glbcfg_t;
 
+typedef struct glbconinfo_t {
+	char     inet_addr[128];
+	uint16_t inet_port;
+	uint8_t  state;
+	uint8_t  channel_count;
+	// TODO: Add more connection info (e.g. latency, remote address, etc.)
+} glbconinfo_t;
+
+typedef enum glb_disconnectreason_t {
+	GLB_DISCONNECT_BY_PEER = 128,
+	GLB_DISCONNECT_TIMEOUT,
+	GLB_DISCONNECT_MAX_ENUM = 0x9F
+} glb_disconnectreason_t;
+
 typedef enum glb_event_type_t {
-	GLB_EVENT_NONE = 0,
+	GLB_EVENT_NONE = 160,
 	GLB_EVENT_CONNECT,
 	GLB_EVENT_DISCONNECT,
 	GLB_EVENT_RECIEVE,
 	GLB_EVENT_ERROR,
+	GLB_EVENT_MAX_ENUM = 0xBF
 } glb_event_type_t;
-
-typedef enum glb_disconnectreason_t {
-	GLB_DISCONNECT_BY_PEER,
-	GLB_DISCONNECT_TIMEOUT
-} glb_disconnectreason_t;
 
 typedef struct glbevent_connect_t {
 	glbconn_t* connection;
@@ -188,14 +199,16 @@ GLB_DECLSPEC glbctx_t* glb_create(const glbcfg_t* config);
 GLB_DECLSPEC int glb_destroy(glbctx_t* ctx);
 
 GLB_DECLSPEC int glb_connect(glbctx_t* ctx); // Connect to server
-GLB_DECLSPEC int glb_close(glbconn_t* conn); // Close a connection
+GLB_DECLSPEC int glb_close(glbconn_t* con); // Close a connection
 
 GLB_DECLSPEC int glb_send(glbctx_t* ctx, glbsendinfo_t* info); // Push data to send queue
 
 GLB_DECLSPEC int glb_tick(glbctx_t* ctx);
 GLB_DECLSPEC int glb_pollevent(glbctx_t* ctx, glbevent_t* event); // Return GLB_SUCCESS if has event to process
 
-//GLB_DECLSPEC int glb_getconnectioninfo(glbconn_t* conn); // TODO: Add function to get connection info (e.g. remote address, latency, etc.)
+GLB_DECLSPEC int glb_getconinfo(glbconn_t* con, glbconinfo_t* info);
+
+GLB_DECLSPEC const char* glb_getstring(uint32_t code);
 
 #ifdef __cplusplus
 }

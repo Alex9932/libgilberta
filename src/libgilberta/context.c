@@ -136,6 +136,7 @@ glbctx_t* glbctx_create(const glbcfg_t* config) {
 	// glbconn_t array is placed right after glbctx_t structure
 	ctx->connections = (glbconn_t*)((char*)ctx + sizeof(glbctx_t));
 	for (size_t i = 0; i < ctx->connection_count; i++) {
+		ctx->connections[i].ctx   = ctx;
 		ctx->connections[i].state = GLB_CONNECTION_CLOSED;
 	}
 

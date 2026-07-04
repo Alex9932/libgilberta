@@ -76,15 +76,23 @@ static void LaunchClient() {
 			switch (event.type) {
 				case GLB_EVENT_CONNECT: {
 					// Connected to the client
-					log_callback(GLB_LOG_INFO, "Connected! Sending message to the server...");
 
 					connection = event.connect.connection;
+
+					glbconinfo_t coninfo = {};
+					glb_getconinfo(connection, &coninfo);
+					char coninfo_str[256];
+					snprintf(coninfo_str, sizeof(coninfo_str), "Connection info: IP: %s, Port: %d, State: %d, Channels: %d",
+						coninfo.inet_addr, coninfo.inet_port, coninfo.state, coninfo.channel_count);
+					log_callback(GLB_LOG_INFO, "Connected!");
+					log_callback(GLB_LOG_INFO, coninfo_str);
 
 					glbsendinfo_t send_info = {};
 					send_info.data = msg;
 					send_info.len = strlen(msg);
 					send_info.conn = connection;
 					send_info.channel_id = 1;
+					log_callback(GLB_LOG_INFO, "Sending message to the server...");
 					int result = glb_send(ctx, &send_info);
 					if (result != GLB_SUCCESS) {
 						log_callback(GLB_LOG_ERROR, "Failed to send data to server!");
@@ -166,6 +174,14 @@ static void LaunchServer() {
 					// New client connected
 					log_callback(GLB_LOG_INFO, "Accepted new connection!");
 					connections.push_back(event.connect.connection);
+
+					glbconinfo_t coninfo = {};
+					glb_getconinfo(event.connect.connection, &coninfo);
+					char coninfo_str[256];
+					snprintf(coninfo_str, sizeof(coninfo_str), "Connection info: IP: %s, Port: %d, State: %d, Channels: %d",
+						coninfo.inet_addr, coninfo.inet_port, coninfo.state, coninfo.channel_count);
+					log_callback(GLB_LOG_INFO, coninfo_str);
+
 					break;
 				}
 				case GLB_EVENT_DISCONNECT: {
