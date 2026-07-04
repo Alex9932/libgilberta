@@ -128,6 +128,7 @@ glbctx_t* glbctx_create(const glbcfg_t* config) {
 	ctx->logger = logger;
 	ctx->flags = config->flags;
 	ctx->connection_count = conns;
+	ctx->channel_count = config->channel_count;
 	ctx->inet_port = config->port;
 	const char* ip = config->ip ? config->ip : "0.0.0.0";
 	snprintf(ctx->inet_addr, 128, "%s", ip);

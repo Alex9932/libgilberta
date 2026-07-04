@@ -34,7 +34,7 @@ struct glbctx_t {
 	char     inet_addr[128];
 	uint16_t inet_port;
 	uint8_t  flags;
-	uint8_t  padding0;
+	uint8_t  channel_count;
 	uint32_t padding1;
 };
 

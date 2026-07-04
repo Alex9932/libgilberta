@@ -17,8 +17,6 @@
 #include "queue.h"
 #include "timer.h"
 
-#include <stdio.h>
-
 // For debug:
 // DL  - Data length (payload length)
 // V   - Version
@@ -77,19 +75,13 @@ int glb_connect(glbctx_t* ctx) {
 	con->conn_id.id = 0xFFFF;
 	struct sockaddr_in* server_addr = &con->peer_addr;
 
-	char logbuff[256];
-	snprintf(logbuff, 256, "[gilberta] Connecting to: %s:%d", ctx->inet_addr, ctx->inet_port);
-	ctx->logger(GLB_LOG_ERROR, logbuff);
-
 	server_addr->sin_family = AF_INET;
 	server_addr->sin_port = htons(ctx->inet_port);
-	ctx->logger(GLB_LOG_ERROR, "[gilberta] pton");
 	if (inet_pton(AF_INET, ctx->inet_addr, &server_addr->sin_addr) != 1) {
 		ctx->logger(GLB_LOG_ERROR, "[gilberta] Invalid IP address is set.");
 		return GLB_ERROR_INVALID_ARGUMENT;
 	}
 
-	ctx->logger(GLB_LOG_ERROR, "[gilberta] Start retransmit timer");
 	// Set state to SYN_SENT and start a 0ms timer to force send SYN in next glb_tick call
 	con->state = GLB_CONNECTION_SYN_SENT;
 	con->retry = 0;
@@ -107,7 +99,7 @@ int glb_close(glbconn_t* conn) {
 }
 
 int glb_send(glbctx_t* ctx, glbsendinfo_t* info) {
-	if (!ctx || !info || !info->conn || !info->data || info->len <= 0 || info->channel_id >= ctx->connection_count) {
+	if (!ctx || !info || !info->conn || !info->data || info->len <= 0 || info->channel_id >= ctx->channel_count) {
 		return GLB_ERROR_INVALID_ARGUMENT;
 	}
 
@@ -165,8 +157,6 @@ int glb_tick(glbctx_t* ctx) {
 			// Send SYN ACK
 			// Start timer for ACK wait
 
-			ctx->logger(GLB_LOG_ERROR, "[gilberta] Server: SYN recvd");
-
 			glbconn_t* con = glbctx_findemplyconn(ctx);
 			if (!con) {
 				// No empty slot, send RST
@@ -188,7 +178,6 @@ int glb_tick(glbctx_t* ctx) {
 			// Client sent ACK (server mode)
 			// Find client by id & ckeck for state (SYN_RCVD)
 			// Set connection as ESTABLISHED
-			ctx->logger(GLB_LOG_ERROR, "[gilberta] Server: ACK recvd");
 			glbconn_t* con = glbctx_findconn(ctx, headerptr->client_gen, headerptr->client_id);
 			if (!con) {
 				continue;
@@ -208,13 +197,13 @@ int glb_tick(glbctx_t* ctx) {
 
 		}
 
-		// TODO: SYN ACK only
-		if ((headerptr->ctrl_flags & (GLB_CTRL_FLAG_SYN | GLB_CTRL_FLAG_ACK)) == (GLB_CTRL_FLAG_SYN | GLB_CTRL_FLAG_ACK) ) {
+		// SYN ACK only
+		int glb_syn_ack = GLB_CTRL_FLAG_SYN | GLB_CTRL_FLAG_ACK;
+		if ((headerptr->ctrl_flags & glb_syn_ack) == glb_syn_ack) {
 			// Server is sent SYN ACK (client mode)
 			// Set client id from server
 			// Send ACK
 			// Set connection as ESTABLISHED
-			ctx->logger(GLB_LOG_ERROR, "[gilberta] Client: SYN ACK recvd");
 			glbconn_t* con = &ctx->connections[0];
 			con->conn_id.generation = headerptr->client_gen;
 			con->conn_id.id = headerptr->client_id;
@@ -234,9 +223,44 @@ int glb_tick(glbctx_t* ctx) {
 				con->state = GLB_CONNECTION_ESTABLISHED;
 			}
 		}
+
+		// Data recieved
+		if (headerptr->ctrl_flags == GLB_CTRL_FLAG_DATA) {
+			glbconn_t* con = glbctx_findconn(ctx, headerptr->client_gen, headerptr->client_id);
+			if (!con) {
+				continue;
+			}
+			if (con->state != GLB_CONNECTION_ESTABLISHED) {
+				// Connection is not ready
+				continue;
+			}
+
+			if (headerptr->channel_id >= ctx->channel_count) {
+				// Invalid channel id
+				continue;
+			}
+
+			// TODO: check peer address
+
+			//glbqueue* queue = con->channels[headerptr->channel_id].r_queue;
+
+			// TODO: add data managment (recieve queue or pool, mb add glb_popeventdata?)
+			glbevent_t event;
+			event.type = GLB_EVENT_RECIEVE;
+			//event.recieve.
+			glbqueue_push(ctx->eventqueue, &event);
+		}
+
+
+		// DATA ACK only
+		int glb_data_ack = GLB_CTRL_FLAG_DATA | GLB_CTRL_FLAG_ACK;
+		if ((headerptr->ctrl_flags & glb_data_ack) == glb_data_ack) {
+			
+		}
 	}
 
 	// Check timers
+	// TODO: add data transmit function
 
 	for (size_t i = 0; i < ctx->connection_count; i++) {
 		glbconn_t* con = &ctx->connections[i];
@@ -259,7 +283,6 @@ int glb_tick(glbctx_t* ctx) {
 
 			glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_SYN);
 			glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len);
-			ctx->logger(GLB_LOG_ERROR, "[gilberta] Client: SYN sent");
 			// And start new timer
 			glbtime_start(&con->time, GLB_RETRY_TIMEOUT * (con->retry + 1));
 			con->retry++;
@@ -277,7 +300,6 @@ int glb_tick(glbctx_t* ctx) {
 			glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_SYN | GLB_CTRL_FLAG_ACK);
 
 			glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len);
-			ctx->logger(GLB_LOG_ERROR, "[gilberta] Server: SYN ACK sent");
 			// And start new timer
 			glbtime_start(&con->time, GLB_RETRY_TIMEOUT * (con->retry + 1));
 			con->retry++;
