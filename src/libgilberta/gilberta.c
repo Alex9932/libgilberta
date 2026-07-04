@@ -189,6 +189,9 @@ int glb_tick(glbctx_t* ctx) {
 
 			con->state = GLB_CONNECTION_ESTABLISHED;
 
+			// Make channels
+			glbctx_createconchannels(ctx, con);
+
 			// Generate event
 			glbevent_t event;
 			event.type = GLB_EVENT_CONNECT;
@@ -210,6 +213,10 @@ int glb_tick(glbctx_t* ctx) {
 			//glbtime_start(&con->time, 0);
 
 			if (con->state != GLB_CONNECTION_ESTABLISHED) {
+
+				// Make channels
+				glbctx_createconchannels(ctx, con);
+
 				// Generate event
 				glbevent_t event;
 				event.type = GLB_EVENT_CONNECT;

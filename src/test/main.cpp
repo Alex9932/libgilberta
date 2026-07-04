@@ -5,7 +5,7 @@
 
 #include <vector>
 
-#define GLB_TEST_CLIENT 0
+#define GLB_TEST_CLIENT 1
 
 static uint8_t     isClient    = 0;
 static const char* address     = NULL;
@@ -148,6 +148,10 @@ static void LaunchServer() {
 
 	// Make context
 	glbctx_t* ctx = glb_create(&config);
+	if (!ctx) {
+		log_callback(GLB_LOG_ERROR, "Failed to create context!");
+		return;
+	}
 
 	std::vector<glbconn_t*> connections;
 

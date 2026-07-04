@@ -203,3 +203,27 @@ glbconn_t* glbctx_findconn(glbctx_t* ctx, uint16_t gen, uint16_t id) {
 	}
 	return NULL;
 }
+
+int glbctx_createconchannels(glbctx_t* ctx, glbconn_t* con) {
+	con->channels = (glbchannel_t*)ctx->allocator.malloc(sizeof(glbchannel_t) * ctx->channel_count);
+	if (!con->channels) {
+		return GLB_ERROR_OUT_OF_MEMORY;
+	}
+
+	for (size_t i = 0; i < ctx->channel_count; i++) {
+		con->channels[i].s_queue = glbqueue_init(ctx, sizeof(glbpkg), 1024); // TODO: Make queue size configurable
+	}
+	return GLB_SUCCESS;
+}
+
+int glbctx_freeconchannels(glbctx_t* ctx, glbconn_t* con) {
+	if (!con->channels) {
+		return GLB_ERROR_INVALID_ARGUMENT;
+	}
+	for (size_t i = 0; i < ctx->channel_count; i++) {
+		glbqueue_free(con->channels[i].s_queue);
+	}
+	ctx->allocator.free(con->channels);
+	con->channels = NULL;
+	return GLB_SUCCESS;
+}

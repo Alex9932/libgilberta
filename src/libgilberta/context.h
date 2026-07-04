@@ -44,4 +44,7 @@ void glbctx_generateclientid(glbctx_t* ctx, glbconid_t* dst);
 glbconn_t* glbctx_findemplyconn(glbctx_t* ctx);
 glbconn_t* glbctx_findconn(glbctx_t* ctx, uint16_t gen, uint16_t id);
 
+int glbctx_createconchannels(glbctx_t* ctx, glbconn_t* con);
+int glbctx_freeconchannels(glbctx_t* ctx, glbconn_t* con);
+
 #endif
