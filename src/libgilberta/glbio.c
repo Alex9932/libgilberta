@@ -92,6 +92,14 @@ int glbio_read(glbctx_t* ctx, glbpkg* pkg, int* recvd, struct sockaddr* from_add
 		return GLB_ERROR_RECV_FAILED; // Invalid magic or version
 	}
 
+	if (pkg->header.payload_len > GILBERTA_MTU) {
+		return GLB_ERROR_RECV_FAILED; // Invalid payload length
+	}
+
+	if (recv_len < (int)(sizeof(glbpkgheader) + pkg->header.payload_len)) {
+		return GLB_ERROR_RECV_FAILED; // Incomplete package
+	}
+
 	if (pkg->header.checksum != crc16_modbus_fast(pkg->data, pkg->header.payload_len)) {
 		return GLB_ERROR_RECV_FAILED; // CRC Error
 	}
