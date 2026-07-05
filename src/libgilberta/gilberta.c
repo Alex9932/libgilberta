@@ -36,6 +36,7 @@
 
 #define GLB_MAX_RETRY     5    // times
 #define GLB_RETRY_TIMEOUT 1000 // ms
+#define GLB_RECV_LIMIT_PER_TICK 100  // Limit of packets to process per tick
 
 static void glbpkg_init(glbpkg* pkg, glbconid_t conn_id, uint8_t ctrl_flags) {
 	pkg->header.magic       = GILBERTA_PROTO_MAGIC;
@@ -138,10 +139,19 @@ int glb_tick(glbctx_t* ctx) {
 	glbpkgheader* headerptr = (glbpkgheader*)&pkg;
 	void* dataptr = (void*)((char*)&pkg + sizeof(glbpkgheader));
 
+	ctx->recv_limit = 0;
+
 	while (1) {
+
+		if (ctx->recv_limit >= GLB_RECV_LIMIT_PER_TICK) {
+			// Limit reached, break the loop
+			break;
+		}
+
 		//int recv_len = recvfrom(ctx->sock, buffer, sizeof(buffer), 0, (struct sockaddr*)&from_addr, &addr_len);
 		int recv_len = 0;
 		int res = glbio_read(ctx, &pkg, &recv_len, (struct sockaddr*)&from_addr, &addr_len);
+		ctx->recv_limit++;
 
 		if (res == GLB_SUCCESS && recv_len == 0) { break; } // No data readed
 		if (res != GLB_SUCCESS) { continue; } // Invalid packet

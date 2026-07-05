@@ -17,8 +17,6 @@ void GWinSockDestroy(GLBLogFunc logger);
 #error "[gilberta] Unsupported platform"
 #endif
 
-#define GLB_MAX_PENDING_CLIENTS 16
-
 struct glbctx_t {
 	GSocketHandle sock;
 	glballoc_t    allocator;
@@ -35,7 +33,11 @@ struct glbctx_t {
 	uint16_t inet_port;
 	uint8_t  flags;
 	uint8_t  channel_count;
-	uint32_t padding1;
+	uint16_t client_gen;
+	uint16_t client_id;
+
+	uint16_t recv_limit;
+	uint16_t _padding;
 };
 
 glbctx_t* glbctx_create(const glbcfg_t* config);

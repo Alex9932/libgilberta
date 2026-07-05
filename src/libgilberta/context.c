@@ -123,6 +123,10 @@ glbctx_t* glbctx_create(const glbcfg_t* config) {
 	}
 
 	glbctx_t* ctx = (glbctx_t*)config->alloc->malloc(sizeof(glbctx_t) + sizeof(glbconn_t) * conns);
+	if (!ctx) {
+		return NULL;
+	}
+
 	ctx->allocator.malloc = config->alloc->malloc;
 	ctx->allocator.free = config->alloc->free;
 	ctx->logger = logger;
@@ -130,6 +134,11 @@ glbctx_t* glbctx_create(const glbcfg_t* config) {
 	ctx->connection_count = conns;
 	ctx->channel_count = config->channel_count;
 	ctx->inet_port = config->port;
+
+	ctx->client_gen = 0;
+	ctx->client_id  = 1;
+	ctx->recv_limit = 0;
+
 	const char* ip = config->ip ? config->ip : "0.0.0.0";
 	snprintf(ctx->inet_addr, 128, "%s", ip);
 
@@ -174,9 +183,13 @@ int glbctx_destroy(glbctx_t* ctx) {
 }
 
 void glbctx_generateclientid(glbctx_t* ctx, glbconid_t* dst) {
-	// TODO
-	dst->generation = 0;
-	dst->id = 0;
+	dst->generation = ctx->client_gen;
+	dst->id = ctx->client_id;
+	ctx->client_id++;
+	if (ctx->client_id == 0xFFFF) {
+		ctx->client_id = 0;
+		dst->generation++;
+	}
 }
 
 glbconn_t* glbctx_findemplyconn(glbctx_t* ctx) {
