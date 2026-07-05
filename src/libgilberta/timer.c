@@ -6,6 +6,11 @@
 static LARGE_INTEGER freq = { 0 };
 #else
 #include <time.h>
+static uint64_t timer_get_current_ms() {
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return (uint64_t)(ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
+}
 #endif
 
 void glbtime_start(glbtimestamp_t* ts, uint32_t interval_ms) {
