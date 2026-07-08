@@ -125,6 +125,7 @@ int glb_send(glbctx_t* ctx, glbsendinfo_t* info) {
 	// Copy data
 	glbpkg pkg;
 	glbpkg_init(&pkg, info->con->conn_id, GLB_CTRL_FLAG_DATA, info->channel_id);
+	pkg.header.seq = chan->seq;
 	pkg.header.payload_len = info->len;
 	memcpy(pkg.data, info->data, info->len);
 
@@ -138,6 +139,7 @@ int glb_send(glbctx_t* ctx, glbsendinfo_t* info) {
 	if (res == GLB_ERROR_QUEUE_FULL) {
 		return GLB_ERROR_QUEUE_FULL;
 	}
+	chan->seq++; // Increment sequence number for next packet
 
 	return GLB_SUCCESS;
 }
@@ -211,17 +213,18 @@ int glb_tick(glbctx_t* ctx) {
 				continue;
 			}
 
-			con->state = GLB_CONNECTION_ESTABLISHED;
+			if (con->state != GLB_CONNECTION_ESTABLISHED) {
+				con->state = GLB_CONNECTION_ESTABLISHED;
 
-			// Make channels
-			glbctx_createconchannels(ctx, con);
+				// Make channels
+				glbctx_createconchannels(ctx, con);
 
-			// Generate event
-			glbevent_t event;
-			event.type = GLB_EVENT_CONNECT;
-			event.connect.connection = con;
-			glbqueue_push(ctx->eventqueue, &event);
-
+				// Generate event
+				glbevent_t event;
+				event.type = GLB_EVENT_CONNECT;
+				event.connect.connection = con;
+				glbqueue_push(ctx->eventqueue, &event);
+			}
 		}
 
 		// SYN ACK only
@@ -321,6 +324,9 @@ int glb_tick(glbctx_t* ctx) {
 
 			glbqueue* queue = con->channels[headerptr->channel_id].r_queue;
 			glbqueue_push(queue, &pkg);
+
+			// TODO: check sequence number, drop duplicates, etc.
+			con->channels[headerptr->channel_id].ack = headerptr->seq; // Update ack for this channel
 
 			// Send ACK for this data packet
 			glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_ACK | GLB_CTRL_FLAG_DATA, headerptr->channel_id);
