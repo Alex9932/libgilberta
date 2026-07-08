@@ -63,10 +63,10 @@ static void LaunchClient() {
 		goto exit;
 	}
 
-	const char* msg = "Client hello";
+	const char* msg = "Hello, Gilberta!";
 	glbconn_t* connection;
 
-	//char recv_buffer[1024];
+	char recv_buffer[1024];
 
 	// Force gilberta to process the send queue and handle incoming packets (e.g. connection ack, etc.)
 	while (true) {
@@ -89,8 +89,8 @@ static void LaunchClient() {
 
 					glbsendinfo_t send_info = {};
 					send_info.data = msg;
-					send_info.len = strlen(msg);
-					send_info.conn = connection;
+					send_info.len  = strlen(msg);
+					send_info.con  = connection;
 					send_info.channel_id = 1;
 					log_callback(GLB_LOG_INFO, "Sending message to the server...");
 					int result = glb_send(ctx, &send_info);
@@ -103,16 +103,24 @@ static void LaunchClient() {
 				case GLB_EVENT_DISCONNECT: {
 					// Disconnected form server
 					log_callback(GLB_LOG_INFO, "Disconnected form server!");
+					log_callback(GLB_LOG_INFO, glb_getstring(event.disconnect.reason));
 					break;
 				}
 				case GLB_EVENT_RECIEVE: {
-					//glbrecvinfo_t recv_info = {};
-					//recv_info.buffer = recv_buffer;
-					//recv_info.buflen = sizeof(recv_buffer);
-					log_callback(GLB_LOG_INFO, "Received data from server:");
-					//printf("  Channel: %d\n", recv_info.channel_id);
-					//printf("  Data: %.*s\n", (int)recv_info.datalen, (char*)recv_info.buffer);
-					
+					glbrecvinfo_t recv_info = {};
+					recv_info.buffer = recv_buffer;
+					recv_info.buflen = sizeof(recv_buffer);
+					recv_info.con    = event.recieve.connection;
+					recv_info.channel_id = event.recieve.channel;
+					if (glb_popdata(ctx, &recv_info) == GLB_SUCCESS) {
+
+						char coninfo_str[256];
+						snprintf(coninfo_str, sizeof(coninfo_str), "-> Channel: %s, data: %.*s",
+							recv_info.channel_id, (int)recv_info.datalen, (char*)recv_info.buffer);
+
+						log_callback(GLB_LOG_INFO, "Received data from server:");
+						log_callback(GLB_LOG_INFO, "coninfo_str");
+					}
 					// Just close after message recieve
 					glb_close(connection);
 					break;
@@ -186,6 +194,10 @@ static void LaunchServer() {
 				}
 				case GLB_EVENT_DISCONNECT: {
 					// Client disconnected
+
+					log_callback(GLB_LOG_INFO, "Client disconnected!");
+					log_callback(GLB_LOG_INFO, glb_getstring(event.disconnect.reason));
+
 					auto it = connections.begin();
 					for (; it != connections.end(); it++) {
 						if (*it == event.disconnect.connection) {
@@ -200,6 +212,21 @@ static void LaunchServer() {
 				}
 				case GLB_EVENT_RECIEVE: {
 					// TODO: Send the recieved message back to client (echo server)
+					char data[1024];
+					glbrecvinfo_t recv_info = {};
+					recv_info.buffer = data;
+					recv_info.buflen = 1024;
+					recv_info.con    = event.recieve.connection;
+					recv_info.channel_id = event.recieve.channel;
+					if (glb_popdata(ctx, &recv_info) == GLB_SUCCESS) {
+						// Send data back to client
+						glbsendinfo_t send_info = {};
+						send_info.data = data;
+						send_info.len = recv_info.datalen;
+						send_info.con = event.recieve.connection;
+						send_info.channel_id = event.recieve.channel;
+						glb_send(ctx, &send_info);
+					}
 					break;
 				}
 				default: {
