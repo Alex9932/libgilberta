@@ -553,7 +553,7 @@ GLB_DECLSPEC int glb_pollevent(glbctx_t* ctx, glbevent_t* event);
  *
  * @see glbrecvinfo_t @see glb_tick()
  */
-GLB_DECLSPEC int glb_popdata(glbrecvinfo_t* info);
+GLB_DECLSPEC int glb_popdata(glbctx_t* ctx, glbrecvinfo_t* info);
 
 /**
  * @brief Get connection information.

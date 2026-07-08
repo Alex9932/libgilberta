@@ -84,7 +84,8 @@ typedef enum GLBConnState {
 	GLB_CONNECTION_CLOSED = 0,  /**< Connection not established */
 	GLB_CONNECTION_ESTABLISHED, /**< Connection is active */
 	GLB_CONNECTION_SYN_SENT,    /**< SYN sent, waiting for SYN-ACK (client) */
-	GLB_CONNECTION_SYN_RCVD     /**< SYN received, SYN-ACK sent (server) */
+	GLB_CONNECTION_SYN_RCVD,    /**< SYN received, SYN-ACK sent (server) */
+	GLB_CONNECTION_FIN_SENT     /**< FIN sent, waiting for FIN-ACK */
 } GLBConnState;
 
 /* ================================= */

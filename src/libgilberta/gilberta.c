@@ -94,8 +94,14 @@ int glb_connect(glbctx_t* ctx) {
 
 int glb_close(glbconn_t* conn) {
 	if (!conn) return GLB_ERROR_INVALID_ARGUMENT;
+	if (conn->state != GLB_CONNECTION_ESTABLISHED) {
+		return GLB_ERROR_CONNECTION_CLOSED;
+	}
 
 	// FIN/RST
+	conn->state = GLB_CONNECTION_FIN_SENT;
+	conn->retry = 0;
+	glbtime_start(&conn->time, 0);
 
 	return GLB_ERROR_UNKNOWN;
 }
@@ -145,7 +151,8 @@ int glb_tick(glbctx_t* ctx) {
 
 	ctx->recv_limit = 0;
 
-	int glb_syn_ack  = GLB_CTRL_FLAG_SYN | GLB_CTRL_FLAG_ACK;
+	int glb_syn_ack  = GLB_CTRL_FLAG_SYN  | GLB_CTRL_FLAG_ACK;
+	int glb_fin_ack  = GLB_CTRL_FLAG_FIN  | GLB_CTRL_FLAG_ACK;
 	int glb_data_ack = GLB_CTRL_FLAG_DATA | GLB_CTRL_FLAG_ACK;
 
 	while (1) {
@@ -244,6 +251,49 @@ int glb_tick(glbctx_t* ctx) {
 			glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_ACK, 0);
 			if (glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len) == GLB_SUCCESS) {
 				con->state = GLB_CONNECTION_ESTABLISHED;
+			}
+		}
+
+		// FIN only
+		if (headerptr->ctrl_flags == GLB_CTRL_FLAG_FIN) {
+			glbconn_t* con = glbctx_findconn(ctx, headerptr->client_gen, headerptr->client_id);
+			if (!con) {
+				continue; // No such connection, ignore
+			}
+
+			// Send FIN ACK and close connection (if not closed)
+			glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_FIN | GLB_CTRL_FLAG_ACK, 0);
+			if (glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len) == GLB_SUCCESS) {
+
+				if (con->state != GLB_CONNECTION_CLOSED) {
+					con->state = GLB_CONNECTION_CLOSED;
+					// TODO: free queues
+					// Generate event (Disconnect)
+					glbevent_t event;
+					event.type = GLB_EVENT_DISCONNECT;
+					event.disconnect.connection = con;
+					event.disconnect.reason = GLB_DISCONNECT_BY_PEER;
+					glbqueue_push(ctx->eventqueue, &event);
+				}
+			}
+		}
+
+		// FIN ACK only
+		if ((headerptr->ctrl_flags & glb_fin_ack) == glb_fin_ack) {
+			// Peer aprove FIN, close connection (if not closed)
+			glbconn_t* con = glbctx_findconn(ctx, headerptr->client_gen, headerptr->client_id);
+			if (!con) {
+				continue; // No such connection, ignore
+			}
+			if (con->state != GLB_CONNECTION_CLOSED) {
+				con->state = GLB_CONNECTION_CLOSED;
+				// TODO: free queues
+				// Generate event (Disconnect)
+				glbevent_t event;
+				event.type = GLB_EVENT_DISCONNECT;
+				event.disconnect.connection = con;
+				event.disconnect.reason = GLB_DISCONNECT_BY_PEER;
+				glbqueue_push(ctx->eventqueue, &event);
 			}
 		}
 
@@ -349,21 +399,46 @@ int glb_tick(glbctx_t* ctx) {
 			con->retry++;
 		}
 
+		if (con->state == GLB_CONNECTION_FIN_SENT && glbtime_isexpired(&con->time)) {
+			if (con->retry >= GLB_MAX_RETRY) {
+				// Force close
+				con->state = GLB_CONNECTION_CLOSED;
+				// TODO: free queues
+				// Generate event (Disconnect)
+				glbevent_t event;
+				event.type = GLB_EVENT_DISCONNECT;
+				event.disconnect.connection = con;
+				event.disconnect.reason = GLB_DISCONNECT_TIMEOUT;
+				glbqueue_push(ctx->eventqueue, &event);
+				continue;
+			}
+
+			glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_FIN, 0);
+			glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len);
+			glbtime_start(&con->time, GLB_RETRY_TIMEOUT * (con->retry + 1));
+
+			con->retry++;
+		}
+
 		// Data transmission (retransmission) for established connections
 		if (con->state == GLB_CONNECTION_ESTABLISHED) {
 			for (size_t ch = 0; ch < ctx->channel_count; ch++) {
 				glbchannel_t* chan = &con->channels[ch];
 				size_t queue_size = glbqueue_size(chan->s_queue);
-				for (size_t q = 0; q < queue_size; q++) {
-					glbpkg pkg;
-					glbqueue_peek(chan->s_queue, &pkg, q);
+				if (queue_size == 0) {
+					continue;
+				}
+				//for (size_t q = 0; q < queue_size; q++) {
+					//glbpkg pkg;
+					//glbqueue_peek(chan->s_queue, &pkg, q);
+					glbqueue_peek(chan->s_queue, &pkg);
 					if (glbtime_isexpired(&pkg.timestamp)) {
 						// Resend packet
 						glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len);
 						// Restart timer for retransmission
 						glbtime_start(&pkg.timestamp, GLB_RETRANSMISSION_TIMEOUT);
 					}
-				}
+				//}
 			}
 		}
 	}
@@ -381,9 +456,9 @@ int glb_pollevent(glbctx_t* ctx, glbevent_t* event) {
 	return GLB_ERROR_QUEUE_EMPTY;
 }
 
-int glb_popdata(glbrecvinfo_t* info) {
+int glb_popdata(glbctx_t* ctx, glbrecvinfo_t* info) {
 	// Implementation for popping data
-	if (!info || !info->con) {
+	if (!ctx ||!info || !info->con) {
 		return GLB_ERROR_INVALID_ARGUMENT;
 	}
 
