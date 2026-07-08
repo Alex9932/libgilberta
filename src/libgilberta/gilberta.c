@@ -181,7 +181,7 @@ int glb_tick(glbctx_t* ctx) {
 			// Send SYN ACK
 			// Start timer for ACK wait
 
-			glbconn_t* con = glbctx_findemplyconn(ctx);
+			glbconn_t* con = glbctx_findemptyconn(ctx);
 			if (!con) {
 				// No empty slot, send RST
 				// Or ignore it
