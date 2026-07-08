@@ -106,6 +106,7 @@ static void LaunchClient() {
 					// Disconnected form server
 					log_callback(GLB_LOG_INFO, "Disconnected form server!");
 					log_callback(GLB_LOG_INFO, glb_getstring(event.disconnect.reason));
+					running = 0;
 					break;
 				}
 				case GLB_EVENT_RECIEVE: {
@@ -117,15 +118,14 @@ static void LaunchClient() {
 					if (glb_popdata(ctx, &recv_info) == GLB_SUCCESS) {
 
 						char coninfo_str[256];
-						snprintf(coninfo_str, sizeof(coninfo_str), "-> Channel: %s, data: %.*s",
+						snprintf(coninfo_str, sizeof(coninfo_str), "-> Channel: %d, data: %.*s",
 							recv_info.channel_id, (int)recv_info.datalen, (char*)recv_info.buffer);
 
 						log_callback(GLB_LOG_INFO, "Received data from server:");
-						log_callback(GLB_LOG_INFO, "coninfo_str");
+						log_callback(GLB_LOG_INFO, coninfo_str);
 					}
 					// Just close after message recieve
 					glb_close(connection);
-					running = 0;
 					break;
 				}
 				default: {
