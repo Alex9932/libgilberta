@@ -23,11 +23,17 @@ project "libgilberta"
 
 	filter "configurations:Debug"
 		defines { "DEBUG" }
+		optimize "Off"
 		symbols "On"
+		runtime "Debug"
+		staticruntime "Off"
 
 	filter "configurations:Release"
 		defines { "NDEBUG" }
+		optimize "On"
 		symbols "On"
+		runtime "Release"
+		staticruntime "Off"
 
 project "test"
 	kind "ConsoleApp"
@@ -43,8 +49,15 @@ project "test"
 
 	filter "configurations:Debug"
 		defines { "DEBUG" }
+		optimize "Off"
 		symbols "On"
+		runtime "Debug"
+		staticruntime "Off"
 
 	filter "configurations:Release"
 		defines { "NDEBUG" }
+		optimize "On"
 		symbols "On"
+		runtime "Release"
+		staticruntime "Off"
+		

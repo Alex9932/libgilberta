@@ -46,7 +46,7 @@ static void LaunchClient() {
 	log_callback(GLB_LOG_INFO, "Launching client");
 
 	glbcfg_t config = {};
-	config.ip = "127.0.0.1"; // TODO: parse from address
+	config.ip = address;
 	config.port = 12345;
 	config.flags = 0;
 	config.alloc = &allocator;
