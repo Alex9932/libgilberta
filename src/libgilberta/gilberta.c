@@ -103,7 +103,7 @@ int glb_close(glbconn_t* conn) {
 	conn->retry = 0;
 	glbtime_start(&conn->time, 0);
 
-	return GLB_ERROR_UNKNOWN;
+	return GLB_SUCCESS;
 }
 
 int glb_send(glbctx_t* ctx, glbsendinfo_t* info) {
@@ -124,7 +124,7 @@ int glb_send(glbctx_t* ctx, glbsendinfo_t* info) {
 
 	// Copy data
 	glbpkg pkg;
-	glbpkg_init(&pkg, info->con->conn_id, GLB_CTRL_FLAG_DATA, 0);
+	glbpkg_init(&pkg, info->con->conn_id, GLB_CTRL_FLAG_DATA, info->channel_id);
 	pkg.header.payload_len = info->len;
 	memcpy(pkg.data, info->data, info->len);
 
@@ -431,12 +431,15 @@ int glb_tick(glbctx_t* ctx) {
 				//for (size_t q = 0; q < queue_size; q++) {
 					//glbpkg pkg;
 					//glbqueue_peek(chan->s_queue, &pkg, q);
-					glbqueue_peek(chan->s_queue, &pkg);
-					if (glbtime_isexpired(&pkg.timestamp)) {
+					glbpkg* pkg_ptr = NULL;
+					if (glbqueue_peek(chan->s_queue, &pkg_ptr) != GLB_SUCCESS) {
+						continue;
+					}
+					if (glbtime_isexpired(&pkg_ptr->timestamp)) {
 						// Resend packet
-						glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len);
+						glbio_send(ctx, pkg_ptr, (struct sockaddr*)&con->peer_addr, addr_len);
 						// Restart timer for retransmission
-						glbtime_start(&pkg.timestamp, GLB_RETRANSMISSION_TIMEOUT);
+						glbtime_start(&pkg_ptr->timestamp, GLB_RETRANSMISSION_TIMEOUT);
 					}
 				//}
 			}

@@ -75,6 +75,8 @@ int glbqueue_pop(glbqueue* queue, void* out_element) {
 	return GLB_SUCCESS;
 }
 
+// change this function to peak the element without moving(copy) data
+#if 0
 int glbqueue_peek(glbqueue* queue, void* out_element) {
 	if (!queue || !out_element) { return GLB_ERROR_INVALID_ARGUMENT; }
 
@@ -85,5 +87,19 @@ int glbqueue_peek(glbqueue* queue, void* out_element) {
 
 	char* src = (char*)queue->pool + (queue->head * queue->element_size);
 	memcpy(out_element, src, queue->element_size);
+	return GLB_SUCCESS;
+}
+#endif
+int glbqueue_peek(glbqueue* queue, void** out_element) {
+	// Check for NULL pointers and empty queue
+	if (!queue || !out_element || !*out_element) { return GLB_ERROR_INVALID_ARGUMENT; }
+	if (queue->length == 0) {
+		queue->ctx->logger(GLB_LOG_WARN, "[gilberta] Queue is empty, cannot peek element");
+		return GLB_ERROR_QUEUE_EMPTY;
+	}
+
+	char* src = (char*)queue->pool + (queue->head * queue->element_size);
+	// Set the output pointer to point to the element in the queue
+	*out_element = src;
 	return GLB_SUCCESS;
 }

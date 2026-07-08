@@ -114,7 +114,23 @@ int glbqueue_pop(glbqueue* queue, void* out_element);
  * @warning Unlike glbqueue_pop(), out_element MUST be non-NULL.
  * @see glbqueue_pop()
  */
-int glbqueue_peek(glbqueue* queue, void* out_element);
+//int glbqueue_peek(glbqueue* queue, void* out_element);
+
+/**
+ * @brief Read an element from the front of the queue without removing it.
+ *
+ * Just set out_element to point to the element in the queue, but does not remove the element.
+ *
+ * @param queue       Queue (not NULL).
+ * @param out_element [out] Pointer for data (MUST NOT be NULL).
+ * @return GLB_SUCCESS on success, error code otherwise.
+ * @retval GLB_ERROR_INVALID_ARGUMENT if queue == NULL or out_element == NULL.
+ * @retval GLB_ERROR_QUEUE_EMPTY if queue is empty.
+ *
+ * @warning Unlike glbqueue_pop(), out_element MUST be non-NULL.
+ * @see glbqueue_pop()
+ */
+int glbqueue_peek(glbqueue* queue, void** out_element);
 
 /**
  * @brief Check if the queue is empty.
