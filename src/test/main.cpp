@@ -5,7 +5,8 @@
 
 #include <vector>
 
-#define GLB_TEST_CLIENT 1
+#define GLB_TEST_CLIENT 0
+#define GLB_GENERATE_CRC16_TABLE 0
 
 static uint8_t     isClient    = 0;
 static const char* address     = NULL;
@@ -69,7 +70,8 @@ static void LaunchClient() {
 	char recv_buffer[1024];
 
 	// Force gilberta to process the send queue and handle incoming packets (e.g. connection ack, etc.)
-	while (true) {
+	int running = 1;
+	while (running) {
 		glb_tick(ctx);
 		glbevent_t event;
 		while (glb_pollevent(ctx, &event) == GLB_SUCCESS) {
@@ -123,6 +125,7 @@ static void LaunchClient() {
 					}
 					// Just close after message recieve
 					glb_close(connection);
+					running = 0;
 					break;
 				}
 				default: {
@@ -142,6 +145,7 @@ static void LaunchClient() {
 
 	}
 
+	log_callback(GLB_LOG_INFO, "Exiting client...");
 	glb_close(connection);
 
 exit:
@@ -212,6 +216,7 @@ static void LaunchServer() {
 				}
 				case GLB_EVENT_RECIEVE: {
 					// TODO: Send the recieved message back to client (echo server)
+					log_callback(GLB_LOG_INFO, "[server] Data received");
 					char data[1024];
 					glbrecvinfo_t recv_info = {};
 					recv_info.buffer = data;
@@ -225,6 +230,7 @@ static void LaunchServer() {
 						send_info.len = recv_info.datalen;
 						send_info.con = event.recieve.connection;
 						send_info.channel_id = event.recieve.channel;
+						log_callback(GLB_LOG_INFO, "[server] Sending back");
 						glb_send(ctx, &send_info);
 					}
 					break;
@@ -236,48 +242,6 @@ static void LaunchServer() {
 
 			}
 		}
-
-#if 0
-		// Send data to clients
-		for (glbconn_t* conn : connections) {
-			const char* msg = "Hello from server!";
-			glbsendinfo_t send_info = {};
-			send_info.conn = conn;
-			send_info.data = msg;
-			send_info.len = strlen(msg);
-			send_info.channel_id = 1; // send on channel 1 (reliable)
-			int result = glb_send(ctx, &send_info);
-			if (result != GLB_SUCCESS) {
-				log_callback(GLB_LOG_ERROR, "Failed to send data to client!");
-			}
-			if (result == GLB_ERROR_CONNECTION_CLOSED) {
-				log_callback(GLB_LOG_INFO, "Connection closed!");
-				closeconn = conn;
-			}
-		}
-		
-		
-
-		// Update gilberta (handle incoming packets, timeouts, etc.)
-
-		glb_tick(ctx);
-
-		// Receive data from clients
-		char recv_buffer[1024];
-		for (glbconn_t* conn : connections) {
-			glbrecvinfo_t recv_info = {};
-			recv_info.buffer = recv_buffer;
-			recv_info.buflen = sizeof(recv_buffer);
-			int result = glb_recv(ctx, &recv_info);
-			if (result == GLB_SUCCESS) {
-				log_callback(GLB_LOG_INFO, "Received data from client:");
-				printf("  Channel: %d\n", recv_info.channel_id);
-				printf("  Data: %.*s\n", (int)recv_info.datalen, (char*)recv_info.buffer);
-			}
-			//else if (result != GLB_ERROR_NO_DATA) {
-			//	log_callback(GLB_LOG_ERROR, "Failed to receive data from client!");
-		}
-#endif
 
 	}
 
@@ -301,7 +265,7 @@ int _main(int argc, char** argv) {
 int main(int argc, char** argv) {
 #endif
 
-#if 0
+#if GLB_GENERATE_CRC16_TABLE
 	static uint16_t crc16_table[256];
 	printf("static uint16_t crc16_table[256] = {");
 	for (int i = 0; i < 256; i++) {
