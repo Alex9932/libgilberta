@@ -109,12 +109,12 @@ static void LaunchClient() {
 					running = 0;
 					break;
 				}
-				case GLB_EVENT_RECIEVE: {
+				case GLB_EVENT_RECEIVE: {
 					glbrecvinfo_t recv_info = {};
 					recv_info.buffer = recv_buffer;
 					recv_info.buflen = sizeof(recv_buffer);
-					recv_info.con    = event.recieve.connection;
-					recv_info.channel_id = event.recieve.channel;
+					recv_info.con    = event.receive.connection;
+					recv_info.channel_id = event.receive.channel;
 					if (glb_popdata(ctx, &recv_info) == GLB_SUCCESS) {
 
 						char coninfo_str[256];
@@ -214,22 +214,22 @@ static void LaunchServer() {
 					}
 					break;
 				}
-				case GLB_EVENT_RECIEVE: {
+				case GLB_EVENT_RECEIVE: {
 					// TODO: Send the recieved message back to client (echo server)
 					log_callback(GLB_LOG_INFO, "[server] Data received");
 					char data[1024];
 					glbrecvinfo_t recv_info = {};
 					recv_info.buffer = data;
 					recv_info.buflen = 1024;
-					recv_info.con    = event.recieve.connection;
-					recv_info.channel_id = event.recieve.channel;
+					recv_info.con    = event.receive.connection;
+					recv_info.channel_id = event.receive.channel;
 					if (glb_popdata(ctx, &recv_info) == GLB_SUCCESS) {
 						// Send data back to client
 						glbsendinfo_t send_info = {};
 						send_info.data = data;
 						send_info.len = recv_info.datalen;
-						send_info.con = event.recieve.connection;
-						send_info.channel_id = event.recieve.channel;
+						send_info.con = event.receive.connection;
+						send_info.channel_id = event.receive.channel;
 						log_callback(GLB_LOG_INFO, "[server] Sending back");
 						glb_send(ctx, &send_info);
 					}

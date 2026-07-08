@@ -92,7 +92,7 @@ int glbqueue_peek(glbqueue* queue, void* out_element) {
 #endif
 int glbqueue_peek(glbqueue* queue, void** out_element) {
 	// Check for NULL pointers and empty queue
-	if (!queue || !out_element || !*out_element) { return GLB_ERROR_INVALID_ARGUMENT; }
+	if (!queue || !out_element) { return GLB_ERROR_INVALID_ARGUMENT; }
 	if (queue->length == 0) {
 		queue->ctx->logger(GLB_LOG_WARN, "[gilberta] Queue is empty, cannot peek element");
 		return GLB_ERROR_QUEUE_EMPTY;

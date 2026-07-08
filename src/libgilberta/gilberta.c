@@ -324,9 +324,9 @@ int glb_tick(glbctx_t* ctx) {
 
 			// TODO: add data managment (receive queue or pool, mb add glb_popeventdata?)
 			glbevent_t event;
-			event.type = GLB_EVENT_RECIEVE;
-			event.recieve.connection = con;
-			event.recieve.channel = headerptr->channel_id;
+			event.type = GLB_EVENT_RECEIVE;
+			event.receive.connection = con;
+			event.receive.channel = headerptr->channel_id;
 			glbqueue_push(ctx->eventqueue, &event);
 		}
 
@@ -429,8 +429,6 @@ int glb_tick(glbctx_t* ctx) {
 					continue;
 				}
 				//for (size_t q = 0; q < queue_size; q++) {
-					//glbpkg pkg;
-					//glbqueue_peek(chan->s_queue, &pkg, q);
 					glbpkg* pkg_ptr = NULL;
 					if (glbqueue_peek(chan->s_queue, &pkg_ptr) != GLB_SUCCESS) {
 						continue;
@@ -470,10 +468,10 @@ int glb_popdata(glbctx_t* ctx, glbrecvinfo_t* info) {
 	}
 
 	glbpkg pkg;
-	glbqueue_pop(info->con->channels[info->channel_id].r_queue, &pkg);
-
-	memcpy(info->buffer, pkg.data, pkg.header.payload_len);
-	info->datalen = pkg.header.payload_len;
+	if (glbqueue_pop(info->con->channels[info->channel_id].r_queue, &pkg) == GLB_SUCCESS) {
+		memcpy(info->buffer, pkg.data, pkg.header.payload_len);
+		info->datalen = pkg.header.payload_len;
+	}
 
 	return GLB_SUCCESS;
 }
@@ -511,7 +509,7 @@ const char* glb_getstring(uint32_t code) {
 		// Events
 		case GLB_EVENT_CONNECT:           return "connect";
 		case GLB_EVENT_DISCONNECT:        return "disconnect";
-		case GLB_EVENT_RECIEVE:           return "receive";
+		case GLB_EVENT_RECEIVE:           return "receive";
 		case GLB_EVENT_ERROR:             return "error";
 
 		default: return "Unknown code";

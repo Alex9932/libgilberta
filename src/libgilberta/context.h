@@ -134,7 +134,7 @@ void glbctx_generateclientid(glbctx_t* ctx, glbconid_t* dst);
  * @note Function does not change the slot state — the calling code does.
  * @see glbconn_t @see GLB_CONNECTION_CLOSED
  */
-glbconn_t* glbctx_findemplyconn(glbctx_t* ctx);
+glbconn_t* glbctx_findemptyconn(glbctx_t* ctx);
 
 /**
  * @brief Find a connection by client ID.

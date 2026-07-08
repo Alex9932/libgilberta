@@ -294,7 +294,7 @@ typedef enum glb_event_type_t {
 	GLB_EVENT_NONE = 160,     /**< No events (not used in queue) */
 	GLB_EVENT_CONNECT,        /**< New connection established */
 	GLB_EVENT_DISCONNECT,     /**< Connection torn down */
-	GLB_EVENT_RECIEVE,        /**< Data received from peer */
+	GLB_EVENT_RECEIVE,        /**< Data received from peer */
 	GLB_EVENT_ERROR,          /**< An error occurred */
 	GLB_EVENT_MAX_ENUM = 0xBF
 } glb_event_type_t;
@@ -327,13 +327,13 @@ typedef struct glbevent_disconnect_t {
  * @warning The data and length fields are populated by the library. The data pointer
  *          is valid only until the next call to glb_pollevent().
  */
-typedef struct glbevent_recieve_t {
+typedef struct glbevent_receive_t {
 	glbconn_t* connection; /**< Connection from which data was received */
 	uint8_t    channel;    /**< Channel ID */
 	uint8_t    _padding0;  /**< Padding */
 	uint16_t   _padding1;  /**< Padding */
 	uint32_t   _padding2;  /**< Padding */
-} glbevent_recieve_t;
+} glbevent_receive_t;
 
 /**
  * @struct glbevent_t
@@ -349,7 +349,7 @@ typedef struct glbevent_t {
 	union {
 		glbevent_connect_t    connect;    /**< Data for GLB_EVENT_CONNECT */
 		glbevent_disconnect_t disconnect; /**< Data for GLB_EVENT_DISCONNECT */
-		glbevent_recieve_t    recieve;    /**< Data for GLB_EVENT_RECIEVE */
+		glbevent_receive_t    receive;    /**< Data for GLB_EVENT_RECEIVE */
 		char                  _raw[56];   /**< Raw data (for fix structure length) */
 	};
 } glbevent_t;
