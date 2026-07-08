@@ -4,7 +4,7 @@
  * Copyright (c) 2026 Alex9932
  *
  * Module:    glbio.c
- * Purpose:   Socket read / write operations. Connection manage
+ * Purpose:   Socket read / write operations.
  *
  * This file is part of the Gilberta library.
  * See the main header (libgilberta.h) for the public API and protocol design.
@@ -103,6 +103,9 @@ int glbio_read(glbctx_t* ctx, glbpkg* pkg, int* recvd, struct sockaddr* from_add
 	if (pkg->header.checksum != crc16_modbus_fast(pkg->data, pkg->header.payload_len)) {
 		return GLB_ERROR_RECV_FAILED; // CRC Error
 	}
+
+	// Add timestamp
+	glbtime_start(&pkg->timestamp, 0);
 
 	*recvd = recv_len;
 	return GLB_SUCCESS;

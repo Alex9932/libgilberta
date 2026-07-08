@@ -329,8 +329,10 @@ typedef struct glbevent_disconnect_t {
  */
 typedef struct glbevent_recieve_t {
 	glbconn_t* connection; /**< Connection from which data was received */
-	void*      data;       /**< Pointer to received data */
-	size_t     length;     /**< Data size in bytes */
+	uint8_t    channel;    /**< Channel ID */
+	uint8_t    _padding0;  /**< Padding */
+	uint16_t   _padding1;  /**< Padding */
+	uint32_t   _padding2;  /**< Padding */
 } glbevent_recieve_t;
 
 /**
@@ -363,25 +365,22 @@ typedef struct glbevent_t {
  */
 typedef struct glbsendinfo_t {
 	const void* data;       /**< Pointer to data to send */
+	glbconn_t*  con;        /**< Connection to send into */
 	size_t      len;        /**< Data length in bytes (max GILBERTA_MTU) */
-	glbconn_t*  conn;       /**< Connection to send into */
 	uint8_t     channel_id; /**< Channel ID (0..channel_count-1) */
 } glbsendinfo_t;
 
 /**
  * @struct glbrecvinfo_t
- * @brief [DEPRECATED] Data receive parameters.
- *
- * @deprecated Use glb_pollevent() and glbevent_recieve_t instead.
+ * @brief Data receive parameters.
  * @see glbevent_recieve_t
  */
 typedef struct glbrecvinfo_t {
 	void*      buffer;     /**< Buffer for receiving */
+	glbconn_t* con;        /**< Source connection */
 	size_t     buflen;     /**< Buffer size */
-	// Set by the library when data is received:
-	glbconn_t* conn;       /**< [out] Source connection */
 	size_t     datalen;    /**< [out] Number of bytes received */
-	uint8_t    channel_id; /**< [out] Channel ID */
+	uint8_t    channel_id; /**< Channel ID */
 } glbrecvinfo_t;
 
 #ifdef __cplusplus
@@ -540,6 +539,21 @@ GLB_DECLSPEC int glb_tick(glbctx_t* ctx);
  * @see glbevent_t @see glb_tick()
  */
 GLB_DECLSPEC int glb_pollevent(glbctx_t* ctx, glbevent_t* event);
+
+/**
+ * @brief Pop data from the receive queue.
+ *
+ * If there are data packets in the queue, populates the info structure and returns GLB_SUCCESS.
+ * If the queue is empty, returns GLB_ERROR_QUEUE_EMPTY.
+ *
+ * @param info [out] Structure to populate (not NULL).
+ * @return GLB_SUCCESS if event was extracted.
+ * @retval GLB_ERROR_INVALID_ARGUMENT if info == NULL.
+ * @retval GLB_ERROR_QUEUE_EMPTY if queue is empty.
+ *
+ * @see glbrecvinfo_t @see glb_tick()
+ */
+GLB_DECLSPEC int glb_popdata(glbrecvinfo_t* info);
 
 /**
  * @brief Get connection information.

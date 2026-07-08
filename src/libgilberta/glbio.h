@@ -102,7 +102,7 @@ typedef enum GLBConnState {
  */
 typedef struct glbchannel_t {
 	glbqueue* s_queue; /**< Send queue (packets awaiting transmission) */
-	//glbqueue* r_queue; /**< Reserved: receive queue */
+	glbqueue* r_queue; /**< Receive queue */
 	uint32_t  seq;     /**< Current sequence number (for sending) */
 	uint32_t  ack;     /**< Expected acknowledgment number (for receiving) */
 } glbchannel_t;
@@ -130,14 +130,22 @@ typedef struct glbconn_t {
 /*  Control flags (ctrl_flags)       */
 /* ================================= */
 
-#define GLB_CTRL_FLAG_SYN  0x01 /** @brief SYN  — connection initiation. */
-#define GLB_CTRL_FLAG_ACK  0x02 /** @brief ACK  — acknowledgment. */
-#define GLB_CTRL_FLAG_PING 0x04 /** @brief PING — keepalive request. */
-#define GLB_CTRL_FLAG_PONG 0x08 /** @brief PONG — keepalive response. */
-#define GLB_CTRL_FLAG_DATA 0x10 /** @brief DATA — packet with data. */
-#define GLB_CTRL_FLAG_RES1 0x20 /** @brief Reserved for future use. */
-#define GLB_CTRL_FLAG_FIN  0x40 /** @brief FIN  — graceful shutdown. */
-#define GLB_CTRL_FLAG_RST  0x80 /** @brief RST  — forced teardown. */
+/** @brief SYN  — connection initiation. */
+#define GLB_CTRL_FLAG_SYN  0x01
+/** @brief ACK  — acknowledgment. */
+#define GLB_CTRL_FLAG_ACK  0x02
+/** @brief PING — keepalive request. */
+#define GLB_CTRL_FLAG_PING 0x04
+/** @brief PONG — keepalive response. */
+#define GLB_CTRL_FLAG_PONG 0x08
+/** @brief DATA — packet with data. */
+#define GLB_CTRL_FLAG_DATA 0x10
+/** @brief Reserved for future use. */
+#define GLB_CTRL_FLAG_RES1 0x20
+/** @brief FIN  — graceful shutdown. */
+#define GLB_CTRL_FLAG_FIN  0x40
+/** @brief RST  — forced teardown. */
+#define GLB_CTRL_FLAG_RST  0x80
 
 /* ================================= */
 /*  Packet structures                */
@@ -227,7 +235,6 @@ int glbio_send(glbctx_t* ctx, glbpkg* pkg, struct sockaddr* to_addr, int addr_le
  * @retval GLB_ERROR_UNKNOWN if magic/version mismatch or checksum is invalid.
  *
  * @note Function is non-blocking (socket in non-blocking mode).
- * @warning The payload_len field is not validated — may lead to buffer overflow.
  * @see glbio_send()
  */
 int glbio_read(glbctx_t* ctx, glbpkg* pkg, int* recvd, struct sockaddr* from_addr, int* addr_len);
