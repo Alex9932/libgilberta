@@ -267,7 +267,9 @@ int glb_tick(glbctx_t* ctx) {
 
 				if (con->state != GLB_CONNECTION_CLOSED) {
 					con->state = GLB_CONNECTION_CLOSED;
-					// TODO: free queues
+					// Free queues
+					glbctx_freeconchannels(ctx, con);
+					
 					// Generate event (Disconnect)
 					glbevent_t event;
 					event.type = GLB_EVENT_DISCONNECT;
@@ -287,7 +289,9 @@ int glb_tick(glbctx_t* ctx) {
 			}
 			if (con->state != GLB_CONNECTION_CLOSED) {
 				con->state = GLB_CONNECTION_CLOSED;
-				// TODO: free queues
+				// Free queues
+				glbctx_freeconchannels(ctx, con);
+
 				// Generate event (Disconnect)
 				glbevent_t event;
 				event.type = GLB_EVENT_DISCONNECT;
