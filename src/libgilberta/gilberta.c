@@ -164,15 +164,13 @@ int glb_tick(glbctx_t* ctx) {
 			break;
 		}
 
-		//int recv_len = recvfrom(ctx->sock, buffer, sizeof(buffer), 0, (struct sockaddr*)&from_addr, &addr_len);
 		int recv_len = 0;
 		int res = glbio_read(ctx, &pkg, &recv_len, (struct sockaddr*)&from_addr, &addr_len);
-		ctx->recv_limit++;
 
 		if (res == GLB_SUCCESS && recv_len == 0) { break; } // No data readed
 		if (res != GLB_SUCCESS) { continue; } // Invalid packet
 
-		// TODO: Process correct packet
+		ctx->recv_limit++; // Count processed packet
 
 		// SYN only
 		if (headerptr->ctrl_flags == GLB_CTRL_FLAG_SYN && headerptr->client_id == 0xFFFF) {
@@ -228,7 +226,8 @@ int glb_tick(glbctx_t* ctx) {
 		}
 
 		// SYN ACK only
-		if ((headerptr->ctrl_flags & glb_syn_ack) == glb_syn_ack) {
+		//if ((headerptr->ctrl_flags & glb_syn_ack) == glb_syn_ack) {
+		if (headerptr->ctrl_flags == glb_syn_ack) {
 			// Server is sent SYN ACK (client mode)
 			// Set client id from server
 			// Send ACK
@@ -284,7 +283,7 @@ int glb_tick(glbctx_t* ctx) {
 		}
 
 		// FIN ACK only
-		if ((headerptr->ctrl_flags & glb_fin_ack) == glb_fin_ack) {
+		if (headerptr->ctrl_flags == glb_fin_ack) {
 			// Peer aprove FIN, close connection (if not closed)
 			glbconn_t* con = glbctx_findconn(ctx, headerptr->client_gen, headerptr->client_id);
 			if (!con) {
@@ -342,7 +341,7 @@ int glb_tick(glbctx_t* ctx) {
 
 
 		// DATA ACK only
-		if ((headerptr->ctrl_flags & glb_data_ack) == glb_data_ack) {
+		if (headerptr->ctrl_flags == glb_data_ack) {
 			glbconn_t* con = glbctx_findconn(ctx, headerptr->client_gen, headerptr->client_id);
 			if (!con) {
 				continue;

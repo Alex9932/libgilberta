@@ -106,6 +106,32 @@ static int GLB_BindSocket(glbctx_t* ctx, const glbcfg_t* config) {
 	return GLB_SUCCESS;
 }
 
+int glbctx_createconchannels(glbctx_t* ctx, glbconn_t* con) {
+	con->channels = (glbchannel_t*)ctx->allocator.malloc(sizeof(glbchannel_t) * ctx->channel_count);
+	if (!con->channels) {
+		return GLB_ERROR_OUT_OF_MEMORY;
+	}
+
+	for (size_t i = 0; i < ctx->channel_count; i++) {
+		con->channels[i].s_queue = glbqueue_init(ctx, sizeof(glbpkg), 1024); // TODO: Make queue size configurable
+		con->channels[i].r_queue = glbqueue_init(ctx, sizeof(glbpkg), 1024); // TODO: Make queue size configurable
+	}
+	return GLB_SUCCESS;
+}
+
+int glbctx_freeconchannels(glbctx_t* ctx, glbconn_t* con) {
+	if (!con->channels) {
+		return GLB_ERROR_INVALID_ARGUMENT;
+	}
+	for (size_t i = 0; i < ctx->channel_count; i++) {
+		glbqueue_free(con->channels[i].s_queue);
+		glbqueue_free(con->channels[i].r_queue);
+	}
+	ctx->allocator.free(con->channels);
+	con->channels = NULL;
+	return GLB_SUCCESS;
+}
+
 glbctx_t* glbctx_create(const glbcfg_t* config) {
 	GLBLogFunc logger = GLB_DefaultLogger;
 	if (!config) { return NULL; }
@@ -164,6 +190,11 @@ glbctx_t* glbctx_create(const glbcfg_t* config) {
 
 	// Initialize system queue, use 1024 by default
 	ctx->eventqueue = glbqueue_init(ctx, sizeof(glbevent_t), config->eventqueue_length == 0 ? 1024 : config->eventqueue_length);
+	if(!ctx->eventqueue) {
+		GLB_CloseSocket(ctx);
+		ctx->allocator.free(ctx);
+		return NULL;
+	}
 
 	ctx->logger(GLB_LOG_INFO, "[gilberta] Context created.");
 	ctx->error = GLB_SUCCESS;
@@ -172,6 +203,12 @@ glbctx_t* glbctx_create(const glbcfg_t* config) {
 
 int glbctx_destroy(glbctx_t* ctx) {
 	glbqueue_free(ctx->eventqueue);
+	for (size_t i = 0; i < ctx->connection_count; i++) {
+		glbconn_t* con = &ctx->connections[i];
+		//if (con->channels) { // Not needed because glbctx_freeconchannels() checks for NULL
+			glbctx_freeconchannels(ctx, con);
+		//}
+	}
 
 	GLB_CloseSocket(ctx);
 
@@ -216,30 +253,4 @@ glbconn_t* glbctx_findconn(glbctx_t* ctx, uint16_t gen, uint16_t id) {
 		}
 	}
 	return NULL;
-}
-
-int glbctx_createconchannels(glbctx_t* ctx, glbconn_t* con) {
-	con->channels = (glbchannel_t*)ctx->allocator.malloc(sizeof(glbchannel_t) * ctx->channel_count);
-	if (!con->channels) {
-		return GLB_ERROR_OUT_OF_MEMORY;
-	}
-
-	for (size_t i = 0; i < ctx->channel_count; i++) {
-		con->channels[i].s_queue = glbqueue_init(ctx, sizeof(glbpkg), 1024); // TODO: Make queue size configurable
-		con->channels[i].r_queue = glbqueue_init(ctx, sizeof(glbpkg), 1024); // TODO: Make queue size configurable
-	}
-	return GLB_SUCCESS;
-}
-
-int glbctx_freeconchannels(glbctx_t* ctx, glbconn_t* con) {
-	if (!con->channels) {
-		return GLB_ERROR_INVALID_ARGUMENT;
-	}
-	for (size_t i = 0; i < ctx->channel_count; i++) {
-		glbqueue_free(con->channels[i].s_queue);
-		glbqueue_free(con->channels[i].r_queue);
-	}
-	ctx->allocator.free(con->channels);
-	con->channels = NULL;
-	return GLB_SUCCESS;
 }

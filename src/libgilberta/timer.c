@@ -18,7 +18,7 @@ void glbtime_start(glbtimestamp_t* ts, uint32_t interval_ms) {
 	if (freq.QuadPart == 0) { QueryPerformanceFrequency(&freq); }
 	LARGE_INTEGER now;
 	QueryPerformanceCounter(&now);
-	((LARGE_INTEGER*)ts)->QuadPart = now.QuadPart + (LONGLONG)((interval_ms * freq.QuadPart) / 1000.0);
+	((LARGE_INTEGER*)ts)->QuadPart = now.QuadPart + (LONGLONG)((interval_ms * freq.QuadPart) / 1000);
 #else
 	*ts = timer_get_current_ms() + interval_ms;
 #endif
