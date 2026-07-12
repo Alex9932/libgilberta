@@ -1,7 +1,7 @@
 workspace "gilberta"
 	configurations { "Debug", "Release" }
 	architecture "x86_64"
-	location "build"
+	location "./"
 
 	VCPKG_ROOT = os.getenv("VCPKG_ROOT") or "C:/vcpkg"
 	VCPKG_TRIPLET = "x64-windows"
