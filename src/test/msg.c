@@ -8,6 +8,8 @@
 
 #include "input.h"
 
+#define MIN(a,b) (((a) < (b)) ? (a) : (b))
+
 static uint8_t     isClient    = 0;
 static const char* address     = NULL;
 static const char* clientname  = NULL;
@@ -62,7 +64,7 @@ void LaunchClient() {
 	char username[64];
 	if (clientname) {
 		log_callback(GLB_LOG_INFO, "Using passed username.");
-		size_t strsize = min(strlen(clientname), 63);
+		size_t strsize = MIN(strlen(clientname), 63);
 		memcpy(username, clientname, strsize);
 		username[strsize] = 0;
 	} else {
