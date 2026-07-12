@@ -10,10 +10,11 @@
 
 static uint8_t     isClient    = 0;
 static const char* address     = NULL;
+static const char* clientname  = NULL;
 
 static glballoc_t  allocator   = { 0 };
 static glblog_t    logger      = { 0 };
-static glbchan_t   channels[2] = { 0 };
+static glbchan_t   channels[1] = { 0 };
 
 
 // WARN:
@@ -37,13 +38,16 @@ static void log_callback(GLBLogLevel level, const char* message) {
 
 static int ProcessArgs(int argc, char** argv) {
 	// -c <ip:port> for client mode, otherwise server mode
-	if (argc > 3) { return 1; } // too many args
+	if (argc > 4) { return 1; } // too many args
 
 	if (argc < 2) { return 0; } // no args, default to server mode
 
-	if (strcmp(argv[1], "-c") == 0 && argc == 3) {
+	if (strcmp(argv[1], "-c") == 0 && (argc == 3 || argc == 4)) {
 		isClient = 1;
 		address = argv[2];
+		if (argc == 4) {
+			clientname = argv[3];
+		}
 	}
 	else {
 		return 1; // invalid args
@@ -53,12 +57,19 @@ static int ProcessArgs(int argc, char** argv) {
 }
 
 void LaunchClient() {
-	log_callback(GLB_LOG_INFO, "Starting client");
+	log_callback(GLB_LOG_INFO, "Starting Gilberta Messenger client...");
 
 	char username[64];
-	log_callback(GLB_LOG_INFO, "Enter username:");
-	fgets(username, sizeof(username), stdin);
-	username[strcspn(username, "\n")] = 0;
+	if (clientname) {
+		log_callback(GLB_LOG_INFO, "Using passed username.");
+		size_t strsize = min(strlen(clientname), 63);
+		memcpy(username, clientname, strsize);
+		username[strsize] = 0;
+	} else {
+		log_callback(GLB_LOG_INFO, "Enter username:");
+		fgets(username, sizeof(username), stdin);
+		username[strcspn(username, "\n")] = 0;
+	}
 
 	glbcfg_t config = { 0 };
 	config.ip              = address;
@@ -67,7 +78,7 @@ void LaunchClient() {
 	config.alloc           = &allocator;
 	config.log             = &logger;
 	config.max_connections = 16;
-	config.channel_count   = 2;
+	config.channel_count   = 1;
 	config.channels        = channels;
 
 	// Make context
@@ -105,7 +116,7 @@ void LaunchClient() {
 					break;
 				}
 				case GLB_EVENT_RECEIVE: {
-					log_callback(GLB_LOG_INFO, "Data received from server");
+					//log_callback(GLB_LOG_INFO, "Data received from server");
 					// Handle received data
 
 					msgdata_t message = { 0 };
@@ -165,7 +176,7 @@ void LaunchClient() {
 }
 
 void LaunchServer() {
-	log_callback(GLB_LOG_INFO, "Starting server");
+	log_callback(GLB_LOG_INFO, "Starting Gilberta Messenger server...");
 
 	glbcfg_t config = { 0 };
 	config.ip              = NULL;
@@ -174,7 +185,7 @@ void LaunchServer() {
 	config.alloc           = &allocator;
 	config.log             = &logger;
 	config.max_connections = 16;
-	config.channel_count   = 2;
+	config.channel_count   = 1;
 	config.channels        = channels;
 
 	// Make context
@@ -212,7 +223,7 @@ void LaunchServer() {
 				}
 
 				case GLB_EVENT_RECEIVE: {
-					log_callback(GLB_LOG_INFO, "Data received from peer");
+					//log_callback(GLB_LOG_INFO, "Data received from peer");
 
 					msgdata_t message = { 0 };
 
@@ -284,17 +295,13 @@ int ModuleMain(int argc, char** argv) {
 		return 1;
 	}
 
-	log_callback(GLB_LOG_INFO, "Starting Gilberta Messenger ...");
-
 	// Setup common configuration for both client and server
 	allocator.malloc = malloc;
 	allocator.free = free;
 	logger.log_func = log_callback;
 
-	channels[0].flags = 0;
+	channels[0].flags = GLB_CHANNEL_FLAG_RELIABLE;
 	channels[0].priority = 0;
-	channels[1].flags = GLB_CHANNEL_FLAG_RELIABLE;
-	channels[1].priority = 0;
 
 	if (isClient) {
 		LaunchClient();
