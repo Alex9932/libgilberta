@@ -17,6 +17,8 @@
 #include "queue.h"
 #include "timer.h"
 
+#include <string.h>
+
 // For debug:
 // DL  - Data length (payload length)
 // V   - Version
