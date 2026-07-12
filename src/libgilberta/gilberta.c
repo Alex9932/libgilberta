@@ -35,9 +35,11 @@
 // Client -> server (ACK) 47 42 00 00 01 00 00 02 00 00 00 00 FF FF 00 00 00 00 00 00 00 00 00 00
 
 #define GLB_MAX_RETRY     5    // times
-#define GLB_RETRY_TIMEOUT 1000 // ms
+#define GLB_RETRY_TIMEOUT 100  // ms
 #define GLB_RECV_LIMIT_PER_TICK 100  // Limit of packets to process per tick
 #define GLB_RETRANSMISSION_TIMEOUT 100 // ms
+#define GLB_KEEPALIVE_RETRY 8 // keepalive retry count
+#define GLB_KEEPALIVE_TIME  200 // ms, keepalive interval (disconnect after GLB_KEEPALIVE_RETRY)
 
 static void glbpkg_init(glbpkg* pkg, glbconid_t conn_id, uint8_t ctrl_flags, uint8_t channel) {
 	pkg->header.magic       = GILBERTA_PROTO_MAGIC;
@@ -225,6 +227,9 @@ int glb_tick(glbctx_t* ctx) {
 				event.type = GLB_EVENT_CONNECT;
 				event.connect.connection = con;
 				glbqueue_push(ctx->eventqueue, &event);
+
+				con->keepalive_retry = 0;
+				glbtime_start(&con->keepalive, GLB_KEEPALIVE_TIME); // Start timer for PING (keep-alive)
 			}
 
 			continue;
@@ -252,6 +257,9 @@ int glb_tick(glbctx_t* ctx) {
 				event.type = GLB_EVENT_CONNECT;
 				event.connect.connection = con;
 				glbqueue_push(ctx->eventqueue, &event);
+
+				con->keepalive_retry = 0;
+				glbtime_start(&con->keepalive, GLB_KEEPALIVE_TIME); // Start timer for PING (keep-alive)
 
 			} // Else just resend ACK for SYN ACK server packet
 
@@ -375,6 +383,41 @@ int glb_tick(glbctx_t* ctx) {
 
 			continue;
 		}
+
+		// PING only
+		if (headerptr->ctrl_flags == GLB_CTRL_FLAG_PING) {
+			// Check if connection exists
+#if 0 // (or do not do this?)
+			glbconn_t* con = glbctx_findconn(ctx, headerptr->client_gen, headerptr->client_id);
+			if (!con) {
+				continue;
+			}
+#endif
+			glbconid_t conn_id;
+			conn_id.generation = headerptr->client_gen;
+			conn_id.id = headerptr->client_id;
+			glbpkg_init(&pkg, conn_id, GLB_CTRL_FLAG_PONG, headerptr->channel_id);
+			glbio_send(ctx, &pkg, (struct sockaddr*)&from_addr, addr_len);
+
+			continue;
+		}
+
+		// PONG only
+		if (headerptr->ctrl_flags == GLB_CTRL_FLAG_PONG) {
+			glbconn_t* con = glbctx_findconn(ctx, headerptr->client_gen, headerptr->client_id);
+			if (!con) {
+				continue;
+			}
+
+			con->keepalive_retry = 0; // Reset keepalive retry counter
+			
+			// TODO: Update RTT (round-trip time) based on timestamp
+
+			// Restart keepalive timer
+			glbtime_start(&con->keepalive, GLB_KEEPALIVE_TIME);
+
+			continue;
+		}
 	}
 
 	// Check timers
@@ -427,7 +470,10 @@ int glb_tick(glbctx_t* ctx) {
 			if (con->retry >= GLB_MAX_RETRY) {
 				// Force close
 				con->state = GLB_CONNECTION_CLOSED;
-				// TODO: free queues
+
+				// Free queues
+				glbctx_freeconchannels(ctx, con);
+
 				// Generate event (Disconnect)
 				glbevent_t event;
 				event.type = GLB_EVENT_DISCONNECT;
@@ -484,6 +530,36 @@ int glb_tick(glbctx_t* ctx) {
 					}
 				}
 
+			}
+
+			// Ping (keep-alive)
+			if (glbtime_isexpired(&con->keepalive)) {
+				// Send PING packet
+#if 1
+				if (con->keepalive_retry > GLB_KEEPALIVE_RETRY) {
+					// Too many retries, close connection
+					con->state = GLB_CONNECTION_CLOSED;
+
+					// Free queues
+					glbctx_freeconchannels(ctx, con);
+
+					// Generate event (Disconnect)
+					glbevent_t event;
+					event.type = GLB_EVENT_DISCONNECT;
+					event.disconnect.connection = con;
+					event.disconnect.reason = GLB_DISCONNECT_TIMEOUT;
+					glbqueue_push(ctx->eventqueue, &event);
+				}
+#else
+				if (con->keepalive_retry > GLB_KEEPALIVE_RETRY) {
+					ctx->logger(GLB_LOG_WARN, "KEEPALIVE TIMEOUT");
+					con->keepalive_retry = 0;
+				}
+#endif
+				glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_PING, 0);
+				glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len);
+				glbtime_start(&con->keepalive, GLB_KEEPALIVE_TIME * (con->keepalive_retry + 1));
+				con->keepalive_retry++;
 			}
 		}
 	}

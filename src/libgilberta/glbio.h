@@ -117,16 +117,18 @@ typedef struct glbchannel_t {
  * @see glbctx_t @see glbchannel_t
  */
 typedef struct glbconn_t {
-	glbctx_t*  ctx;         /**< Parent context */
-	glbaddr_t  peer_addr;   /**< Peer address (IP + port) */
-	glbconid_t conn_id;     /**< Peer's logical ID */
-	uint8_t    state;       /**< Current state (GLBConnState) */
-	uint8_t    retry;       /**< Handshake retry counter */
-	uint16_t   padding2;    /**< Padding */
-	uint32_t   loss_count;  /**< Count of lost packets (for statistics) */
-	uint32_t   rtt;         /**< Round-trip time in milliseconds */
-	glbchannel_t* channels; /**< Array of channels (NULL if CLOSED) */
-	glbtimestamp_t time;    /**< Time of last activity (for timeouts) */
+	glbctx_t*  ctx;             /**< Parent context */
+	glbaddr_t  peer_addr;       /**< Peer address (IP + port) */
+	glbconid_t conn_id;         /**< Peer's logical ID */
+	uint8_t    state;           /**< Current state (GLBConnState) */
+	uint8_t    retry;           /**< Handshake retry counter */
+	uint8_t    keepalive_retry; /**< Padding */
+	uint8_t    padding2;        /**< Padding */
+	uint32_t   loss_count;      /**< Count of lost packets (for statistics) */
+	uint32_t   rtt;             /**< Round-trip time in milliseconds */
+	glbchannel_t*  channels;    /**< Array of channels (NULL if CLOSED) */
+	glbtimestamp_t time;        /**< Time of last activity (for timeouts) */
+	glbtimestamp_t keepalive;   /**< Ping timestamp */
 } glbconn_t;
 
 /* ================================= */
