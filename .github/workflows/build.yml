@@ -37,7 +37,7 @@ jobs:
       run: |
         Invoke-WebRequest -Uri "https://github.com/premake/premake-core/releases/download/v5.0.0-beta2/premake-5.0.0-beta2-windows.zip" -OutFile "premake.zip"
         Expand-Archive -Path premake.zip -DestinationPath .
-        Move-Item -Path premake5.exe -Destination C:\Windows\System32\
+        #Move-Item -Path premake5.exe -Destination C:\Windows\System32\
 
     # --- Generate projects ---
     - name: Generate Makefiles (Linux/macOS)
@@ -46,7 +46,7 @@ jobs:
 
     - name: Generate Visual Studio Project (Windows)
       if: runner.os == 'Windows'
-      run: premake5 vs2022
+      run: ./premake5.exe vs2026
 
     # --- Build ---
     - name: Build Library (Linux/macOS)
@@ -55,7 +55,7 @@ jobs:
 
     - name: Build Library (Windows)
       if: runner.os == 'Windows'
-      run: msbuild gilberta.sln /p:Configuration=Release /p:Platform=x64
+      run: msbuild gilberta.slnx /p:Configuration=Release /p:Platform=x64
 
     # --- Upload Artifacts ---
     - name: Upload Build Artifacts
