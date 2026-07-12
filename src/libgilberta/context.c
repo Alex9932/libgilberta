@@ -228,9 +228,8 @@ int glbctx_destroy(glbctx_t* ctx) {
 	glbqueue_free(ctx->eventqueue);
 	for (size_t i = 0; i < ctx->connection_count; i++) {
 		glbconn_t* con = &ctx->connections[i];
-		//if (con->channels) { // Not needed because glbctx_freeconchannels() checks for NULL
-			glbctx_freeconchannels(ctx, con);
-		//}
+		// NULL check NOT needed because glbctx_freeconchannels() checks for NULL
+		glbctx_freeconchannels(ctx, con);
 	}
 
 	GLB_CloseSocket(ctx);

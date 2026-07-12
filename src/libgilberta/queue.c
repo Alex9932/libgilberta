@@ -15,6 +15,13 @@
 #include "context.h"
 
 glbqueue* glbqueue_init(glbctx_t* ctx, uint32_t element_size, uint32_t capacity) {
+	if (!ctx || element_size == 0 || capacity == 0) {
+		if (ctx && ctx->logger) {
+			ctx->logger(GLB_LOG_ERROR, "[gilberta] Invalid arguments for queue initialization");
+		}
+		return NULL;
+	}
+
 	void* data = ctx->allocator.malloc(sizeof(glbqueue) + (size_t)capacity * (size_t)element_size);
 	if (!data) {
 		ctx->logger(GLB_LOG_ERROR, "[gilberta] Failed to allocate memory for queue");

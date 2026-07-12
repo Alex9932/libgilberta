@@ -501,7 +501,7 @@ int glb_tick(glbctx_t* ctx) {
 				}
 
 				glbpkg* pkg_ptr = NULL;
-				if (glbqueue_peek(chan->s_queue, &pkg_ptr) != GLB_SUCCESS) {
+				if (glbqueue_peek(chan->s_queue, &pkg_ptr) != GLB_SUCCESS || !pkg_ptr) {
 					continue;
 				}
 				if (glbtime_isexpired(&pkg_ptr->timestamp)) {
@@ -589,7 +589,7 @@ int glb_pollevent(glbctx_t* ctx, glbevent_t* event) {
 
 int glb_popdata(glbctx_t* ctx, glbrecvinfo_t* info) {
 	// Implementation for popping data
-	if (!ctx ||!info || !info->con) {
+	if (!ctx ||!info || !info->con || !info->buffer || info->buflen == 0) {
 		return GLB_ERROR_INVALID_ARGUMENT;
 	}
 
