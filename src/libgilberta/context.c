@@ -113,6 +113,9 @@ int glbctx_createconchannels(glbctx_t* ctx, glbconn_t* con) {
 	}
 
 	for (size_t i = 0; i < ctx->channel_count; i++) {
+		con->channels[i].flags    = ctx->channel_configs[i].flags;
+		con->channels[i].priority = ctx->channel_configs[i].priority;
+
 		con->channels[i].s_queue = glbqueue_init(ctx, sizeof(glbpkg), 1024); // TODO: Make queue size configurable
 		con->channels[i].r_queue = glbqueue_init(ctx, sizeof(glbpkg), 1024); // TODO: Make queue size configurable
 	}
@@ -164,6 +167,11 @@ glbctx_t* glbctx_create(const glbcfg_t* config) {
 	ctx->client_gen = 0;
 	ctx->client_id  = 1;
 	ctx->recv_limit = 0;
+
+	// Copy channels configuration
+	for (size_t i = 0; i < ctx->channel_count; i++) {
+		ctx->channel_configs[i] = config->channels[i];
+	}
 
 	const char* ip = config->ip ? config->ip : "0.0.0.0";
 	snprintf(ctx->inet_addr, 128, "%s", ip);

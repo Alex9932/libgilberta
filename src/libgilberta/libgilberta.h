@@ -224,7 +224,6 @@ typedef struct glblog_t {
 typedef struct glbchan_t {
 	uint8_t  priority; /**< Channel priority (0 = highest) */
 	uint8_t  flags;    /**< Combination of GLB_CHANNEL_FLAG_* */
-	uint16_t padding;  /**< Padding to align to 4 bytes */
 } glbchan_t;
 
 /**

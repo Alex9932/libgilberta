@@ -346,11 +346,12 @@ int glb_tick(glbctx_t* ctx) {
 			// TODO: check sequence number, drop duplicates, etc.
 			con->channels[headerptr->channel_id].ack = headerptr->seq; // Update ack for this channel
 
-			// Send ACK for this data packet
-			glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_ACK | GLB_CTRL_FLAG_DATA, headerptr->channel_id);
-			glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len);
+			// Send ACK for this data packet if reliable delivery channel
+			if (con->channels[headerptr->channel_id].flags & GLB_CHANNEL_FLAG_RELIABLE) {
+				glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_ACK | GLB_CTRL_FLAG_DATA, headerptr->channel_id);
+				glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len);
+			}
 
-			// TODO: add data managment (receive queue or pool, mb add glb_popeventdata?)
 			glbevent_t event;
 			event.type = GLB_EVENT_RECEIVE;
 			event.receive.connection = con;
@@ -506,6 +507,13 @@ int glb_tick(glbctx_t* ctx) {
 				if (glbtime_isexpired(&pkg_ptr->timestamp)) {
 					// Resend packet
 					glbio_send(ctx, pkg_ptr, (struct sockaddr*)&con->peer_addr, addr_len);
+
+					if (con->channels[headerptr->channel_id].flags & GLB_CHANNEL_FLAG_RELIABLE == 0) {
+						// Not reliable channel, pop the packet from the queue to avoid infinite retransmission
+						glbqueue_pop(chan->s_queue, NULL);
+						continue;
+					}
+
 					// Restart timer for retransmission
 					glbtime_start(&pkg_ptr->timestamp, GLB_RETRANSMISSION_TIMEOUT);
 					// Increment retransmission count

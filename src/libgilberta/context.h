@@ -61,16 +61,19 @@ struct glbctx_t {
 	uint32_t      connection_count; /**< Number of allocated connection slots */
 
 	int           error;            /**< Last error code */
-	
-	char          inet_addr[128];   /**< Local IP address (string) */
-	uint16_t      inet_port;        /**< Local port */
 	uint8_t       flags;            /**< Context flags (GLB_FLAG_*) */
 	uint8_t       channel_count;    /**< Number of channels per connection */
 	uint16_t      client_gen;       /**< Current client ID generation */
 	uint16_t      client_id;        /**< Current client ID */
 
 	uint16_t      recv_limit;       /**< Packet limit per one glb_tick() */
-	uint16_t      _padding;         /**< Padding */
+
+	uint16_t      inet_port;        /**< Local port */
+	uint16_t      _padding1;        /**< Padding */
+	uint32_t      _padding2;        /**< Padding */
+	char          inet_addr[128];   /**< Local IP address (string) */
+
+	glbchan_t     channel_configs[256]; /**< Channel configurations (length = channel_count) */
 };
 
 /* ================================= */
