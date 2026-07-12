@@ -1,4 +1,4 @@
-name: Build and Test
+name: Build
 
 on:
   push:
@@ -35,10 +35,8 @@ jobs:
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
-        #Invoke-WebRequest -Uri "https://github.com/premake/premake-core/releases/download/v5.0.0-beta8/premake-5.0.0-beta8-windows.zip" -OutFile "premake.zip"
         curl.exe -L -o premake.zip "https://github.com/premake/premake-core/releases/download/v5.0.0-beta8/premake-5.0.0-beta8-windows.zip"
         Expand-Archive -Path premake.zip -DestinationPath .
-        #Move-Item -Path premake5.exe -Destination C:\Windows\System32\
 
     # --- Generate projects ---
     - name: Generate Makefiles (Linux/macOS)

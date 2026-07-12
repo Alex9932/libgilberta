@@ -1,3 +1,6 @@
+![Build](https://github.com/Alex9932/libgilberta/actions/workflows/build.yml/badge.svg)
+![License](https://img.shields.io/badge/license-MIT-yellow)
+
 # 🚀 Gilberta – Real-time Communication Library
 
 **Gilberta** is a lightweight C library for real-time data exchange between applications.  
