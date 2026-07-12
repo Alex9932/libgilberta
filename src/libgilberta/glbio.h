@@ -123,6 +123,8 @@ typedef struct glbconn_t {
 	uint8_t    state;       /**< Current state (GLBConnState) */
 	uint8_t    retry;       /**< Handshake retry counter */
 	uint16_t   padding2;    /**< Padding */
+	uint32_t   loss_count;  /**< Count of lost packets (for statistics) */
+	uint32_t   rtt;         /**< Round-trip time in milliseconds */
 	glbchannel_t* channels; /**< Array of channels (NULL if CLOSED) */
 	glbtimestamp_t time;    /**< Time of last activity (for timeouts) */
 } glbconn_t;
@@ -194,6 +196,7 @@ typedef struct glbpkg {
 	glbpkgheader   header;             /**< Packet header */
 	char           data[GILBERTA_MTU]; /**< Payload (up to 1024 bytes) */
 	glbtimestamp_t timestamp;          /**< Receipt time (for RTT) */
+	uint64_t       retransmit_count;   /**< Number of retransmissions (for statistics) */
 } glbpkg;
 
 /* ================================= */

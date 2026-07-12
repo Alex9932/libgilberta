@@ -127,6 +127,7 @@ int glb_send(glbctx_t* ctx, glbsendinfo_t* info) {
 	glbpkg_init(&pkg, info->con->conn_id, GLB_CTRL_FLAG_DATA, info->channel_id);
 	pkg.header.seq = chan->seq;
 	pkg.header.payload_len = info->len;
+	pkg.retransmit_count = 0;
 	memcpy(pkg.data, info->data, info->len);
 
 	// Add timestamp (for retransmission)
@@ -195,6 +196,8 @@ int glb_tick(glbctx_t* ctx) {
 			// Send SYN ACK
 			// Set state to SYN_RCVD and start a 0ms timer to force send SYN ACK in next glb_tick call
 			glbtime_start(&con->time, 0);
+
+			continue;
 		}
 
 		// ACK only
@@ -223,6 +226,8 @@ int glb_tick(glbctx_t* ctx) {
 				event.connect.connection = con;
 				glbqueue_push(ctx->eventqueue, &event);
 			}
+
+			continue;
 		}
 
 		// SYN ACK only
@@ -254,6 +259,8 @@ int glb_tick(glbctx_t* ctx) {
 			if (glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len) == GLB_SUCCESS) {
 				con->state = GLB_CONNECTION_ESTABLISHED;
 			}
+
+			continue;
 		}
 
 		// FIN only
@@ -280,6 +287,8 @@ int glb_tick(glbctx_t* ctx) {
 					glbqueue_push(ctx->eventqueue, &event);
 				}
 			}
+
+			continue;
 		}
 
 		// FIN ACK only
@@ -301,6 +310,8 @@ int glb_tick(glbctx_t* ctx) {
 				event.disconnect.reason = GLB_DISCONNECT_BY_PEER;
 				glbqueue_push(ctx->eventqueue, &event);
 			}
+
+			continue;
 		}
 
 		// Data recieved
@@ -337,6 +348,8 @@ int glb_tick(glbctx_t* ctx) {
 			event.receive.connection = con;
 			event.receive.channel = headerptr->channel_id;
 			glbqueue_push(ctx->eventqueue, &event);
+
+			continue;
 		}
 
 
@@ -359,11 +372,13 @@ int glb_tick(glbctx_t* ctx) {
 			//TODO:
 			// con->channels[headerptr->channel_id].ack = headerptr->ack;
 			glbqueue_pop(con->channels[headerptr->channel_id].s_queue, NULL); // Remove acknowledged packet from send queue
+
+			continue;
 		}
 	}
 
 	// Check timers
-	// TODO: add data transmit function
+	// Data transmit
 
 	for (size_t i = 0; i < ctx->connection_count; i++) {
 		glbconn_t* con = &ctx->connections[i];
@@ -437,18 +452,38 @@ int glb_tick(glbctx_t* ctx) {
 				if (queue_size == 0) {
 					continue;
 				}
-				//for (size_t q = 0; q < queue_size; q++) {
-					glbpkg* pkg_ptr = NULL;
-					if (glbqueue_peek(chan->s_queue, &pkg_ptr) != GLB_SUCCESS) {
-						continue;
+
+				glbpkg* pkg_ptr = NULL;
+				if (glbqueue_peek(chan->s_queue, &pkg_ptr) != GLB_SUCCESS) {
+					continue;
+				}
+				if (glbtime_isexpired(&pkg_ptr->timestamp)) {
+					// Resend packet
+					glbio_send(ctx, pkg_ptr, (struct sockaddr*)&con->peer_addr, addr_len);
+					// Restart timer for retransmission
+					glbtime_start(&pkg_ptr->timestamp, GLB_RETRANSMISSION_TIMEOUT);
+					// Increment retransmission count
+					pkg_ptr->retransmit_count++;
+					if (pkg_ptr->retransmit_count > GLB_MAX_RETRY) {
+
+						// Pop the packet from the queue to avoid infinite retransmission
+						// TODO: Consider notifying the application about the failed packet
+						glbqueue_pop(chan->s_queue, &pkg);
+						con->loss_count++;
+#if 0
+						// Too many retransmissions, close connection
+						con->state = GLB_CONNECTION_CLOSED;
+						glbctx_freeconchannels(ctx, con);
+						// Generate event (Disconnect)
+						glbevent_t event;
+						event.type = GLB_EVENT_DISCONNECT;
+						event.disconnect.connection = con;
+						event.disconnect.reason = GLB_DISCONNECT_TIMEOUT;
+						glbqueue_push(ctx->eventqueue, &event);
+#endif
 					}
-					if (glbtime_isexpired(&pkg_ptr->timestamp)) {
-						// Resend packet
-						glbio_send(ctx, pkg_ptr, (struct sockaddr*)&con->peer_addr, addr_len);
-						// Restart timer for retransmission
-						glbtime_start(&pkg_ptr->timestamp, GLB_RETRANSMISSION_TIMEOUT);
-					}
-				//}
+				}
+
 			}
 		}
 	}
@@ -472,12 +507,20 @@ int glb_popdata(glbctx_t* ctx, glbrecvinfo_t* info) {
 		return GLB_ERROR_INVALID_ARGUMENT;
 	}
 
-	if (info->buflen < GILBERTA_MTU) {
+	glbqueue* queue = info->con->channels[info->channel_id].r_queue;
+
+	glbpkg* pkg_ = NULL;
+	if (glbqueue_peek(queue, &pkg_) != GLB_SUCCESS) {
+		return GLB_ERROR_QUEUE_EMPTY; // No data available
+	}
+
+	//if (info->buflen < GILBERTA_MTU) {
+	if (info->buflen < pkg_->header.payload_len) {
 		return GLB_ERROR_INVALID_ARGUMENT; // Buffer too small
 	}
 
 	glbpkg pkg;
-	if (glbqueue_pop(info->con->channels[info->channel_id].r_queue, &pkg) == GLB_SUCCESS) {
+	if (glbqueue_pop(queue, &pkg) == GLB_SUCCESS) {
 		memcpy(info->buffer, pkg.data, pkg.header.payload_len);
 		info->datalen = pkg.header.payload_len;
 	}
