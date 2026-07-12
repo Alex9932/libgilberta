@@ -14,6 +14,8 @@
 #include "queue.h"
 #include "context.h"
 
+#include <string.h>
+
 glbqueue* glbqueue_init(glbctx_t* ctx, uint32_t element_size, uint32_t capacity) {
 	if (!ctx || element_size == 0 || capacity == 0) {
 		if (ctx && ctx->logger) {
