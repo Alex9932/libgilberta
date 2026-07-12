@@ -49,6 +49,10 @@ jobs:
       if: runner.os == 'Windows'
       run: ./premake5.exe vs2026
 
+    - name: Add MSBuild to PATH
+      if: runner.os == 'Windows'
+      run: microsoft/setup-msbuild@v2
+
     # --- Build ---
     - name: Build Library (Linux/macOS)
       if: runner.os != 'Windows'
