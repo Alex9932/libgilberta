@@ -22,11 +22,11 @@ jobs:
       if: runner.os != 'Windows'
       run: |
         if [ "$RUNNER_OS" == "Linux" ]; then
-          wget -q https://github.com/premake/premake-core/releases/download/v5.0.0-beta2/premake-5.0.0-beta2-linux.tar.gz
-          tar -xzf premake-5.0.0-beta2-linux.tar.gz
+          wget -q https://github.com/premake/premake-core/releases/download/v5.0.0-beta8/premake-5.0.0-beta8-linux.tar.gz
+          tar -xzf premake-5.0.0-beta8-linux.tar.gz
         else
-          wget -q https://github.com/premake/premake-core/releases/download/v5.0.0-beta2/premake-5.0.0-beta2-macosx.tar.gz
-          tar -xzf premake-5.0.0-beta2-macosx.tar.gz
+          wget -q https://github.com/premake/premake-core/releases/download/v5.0.0-beta8/premake-5.0.0-beta8-macosx.tar.gz
+          tar -xzf premake-5.0.0-beta8-macosx.tar.gz
         fi
         chmod +x premake5
         sudo mv premake5 /usr/local/bin/
@@ -35,8 +35,8 @@ jobs:
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
-        #Invoke-WebRequest -Uri "https://github.com/premake/premake-core/releases/download/v5.0.0-beta2/premake-5.0.0-beta2-windows.zip" -OutFile "premake.zip"
-        curl.exe -L -o premake.zip "https://github.com/premake/premake-core/releases/download/v5.0.0-beta2/premake-5.0.0-beta2-windows.zip"
+        #Invoke-WebRequest -Uri "https://github.com/premake/premake-core/releases/download/v5.0.0-beta8/premake-5.0.0-beta8-windows.zip" -OutFile "premake.zip"
+        curl.exe -L -o premake.zip "https://github.com/premake/premake-core/releases/download/v5.0.0-beta8/premake-5.0.0-beta8-windows.zip"
         Expand-Archive -Path premake.zip -DestinationPath .
         #Move-Item -Path premake5.exe -Destination C:\Windows\System32\
 
