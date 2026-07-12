@@ -75,15 +75,21 @@ The output (static/dynamic library) will be placed in `bin/` or `lib/`.
 #include <stdio.h>
 
 int main() {
+    glbchan_t channel = {
+        .priority = 0,                        // highest priority (not implemented yet)
+        .reliable = GLB_CHANNEL_FLAG_RELIABLE // reliable delivery
+    };
+
     glbcfg_t cfg = {
         .ip = NULL,                  // server mode
-        .port = 8080,
-        .flags = GLB_FLAG_BIND_PORT,
-        .channel_count = 1,
-        .eventqueue_length = 64,
+        .port = 8080,                // listen on port 8080
+        .flags = GLB_FLAG_BIND_PORT, // bind to port
+        .channel_count = 1,          // one channel
+        .eventqueue_length = 64,     // event queue size
+        .max_connections = 16,       // max clients
         .alloc = NULL,               // use malloc/free
-        .log = NULL,                 // no logging
-        .channels = NULL             // default channel params
+        .log = NULL,                 // default log callback
+        .channels = &channel         // channel params
     };
 
     glbctx_t* ctx = glb_create(&cfg);
@@ -119,12 +125,21 @@ int main() {
 #include <string.h>
 
 int main() {
+    glbchan_t channel = {
+        .priority = 0,                        // highest priority (not implemented yet)
+        .reliable = GLB_CHANNEL_FLAG_RELIABLE // reliable delivery
+    };
+
     glbcfg_t cfg = {
-        .ip = "127.0.0.1",
-        .port = 8080,
+        .ip = "127.0.0.1",           // connect to localhost
+        .port = 8080,                // server port
         .flags = 0,                  // client mode
-        .channel_count = 1,
-        .eventqueue_length = 64
+        .channel_count = 1,          // one channel
+        .eventqueue_length = 64,     // event queue size
+        .max_connections = 16,       // max clients
+        .alloc = NULL,               // use malloc/free
+        .log = NULL,                 // default log callback
+        .channels = &channel         // channel params
     };
 
     glbctx_t* ctx = glb_create(&cfg);
@@ -142,27 +157,33 @@ int main() {
 
     // poll events...
     glbevent_t ev;
-    int connected = 0;
+    int running = 1;
     
-    while(!connected) {
+    while(!running) {
         glb_tick(ctx);
-        while (!connected && glb_pollevent(ctx, &ev) == 0) {
+        while (glb_pollevent(ctx, &ev) == 0) {
+
+            // Wait for GLB_EVENT_CONNECT before sending
             if (ev.type == GLB_EVENT_CONNECT) {
-                connected = 1;
+                glb_send(ctx, &info);
+                break;
+            }
+            if (ev.type == GLB_EVENT_DISCONNECT) {
+                running = 0;
                 break;
             }
         }
-    }
-
-    // Wait for GLB_EVENT_CONNECT before sending
-    if (connected) {
-        glb_send(ctx, &info);
     }
 
     glb_destroy(ctx);
     return 0;
 }
 ```
+
+## 🧪 More Examples
+Check out the `src/test/` directory for ready-to-run examples:
+- **`echo.c`** — minimal echo test to verify the setup
+- **`msg.c`** — simple chat-like application
 
 ## 📚 API Overview
 
