@@ -9,7 +9,7 @@ static LARGE_INTEGER freq = { 0 };
 static uint64_t timer_get_current_ms() {
 	struct timespec ts;
 	clock_gettime(CLOCK_MONOTONIC, &ts);
-	return (uint64_t)(ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
+	return (uint64_t)(ts.tv_sec * 1000 + ts.tv_nsec / 1000000) + 1; // +1 to avoid 0 timestamp (0 means "not started")
 }
 #endif
 

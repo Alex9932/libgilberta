@@ -118,6 +118,18 @@ int glbctx_createconchannels(glbctx_t* ctx, glbconn_t* con) {
 
 		con->channels[i].s_queue = glbqueue_init(ctx, sizeof(glbpkg), 1024); // TODO: Make queue size configurable
 		con->channels[i].r_queue = glbqueue_init(ctx, sizeof(glbpkg), 1024); // TODO: Make queue size configurable
+		if (!con->channels[i].s_queue || !con->channels[i].r_queue) {
+			// Free previously allocated queues and channels
+			for (size_t j = 0; j <= i; j++) {
+				// We CAN pass NULL to glbqueue_free() because it checks for NULL internally, so we don't need to check here
+				glbqueue_free(con->channels[j].s_queue);
+				glbqueue_free(con->channels[j].r_queue);
+			}
+			ctx->allocator.free(con->channels);
+			con->channels = NULL;
+
+			return GLB_ERROR_OUT_OF_MEMORY;
+		}
 	}
 	return GLB_SUCCESS;
 }
@@ -137,8 +149,11 @@ int glbctx_freeconchannels(glbctx_t* ctx, glbconn_t* con) {
 
 glbctx_t* glbctx_create(const glbcfg_t* config) {
 	GLBLogFunc logger = GLB_DefaultLogger;
+	glballoc_t galloc = { malloc, free };
 	if (!config) { return NULL; }
-	if (!config->alloc) { return NULL; }
+	if (config->alloc && config->alloc->malloc && config->alloc->free) {
+		galloc = *config->alloc;
+	}
 	if (config->log && config->log->log_func) {
 		logger = config->log->log_func;
 	}
@@ -151,18 +166,18 @@ glbctx_t* glbctx_create(const glbcfg_t* config) {
 		conns = config->max_connections;
 	}
 
-	glbctx_t* ctx = (glbctx_t*)config->alloc->malloc(sizeof(glbctx_t) + sizeof(glbconn_t) * conns);
+	glbctx_t* ctx = (glbctx_t*)galloc.malloc(sizeof(glbctx_t) + sizeof(glbconn_t) * (size_t)conns);
 	if (!ctx) {
 		return NULL;
 	}
 
-	ctx->allocator.malloc = config->alloc->malloc;
-	ctx->allocator.free = config->alloc->free;
-	ctx->logger = logger;
-	ctx->flags = config->flags;
+	ctx->allocator.malloc = galloc.malloc;
+	ctx->allocator.free   = galloc.free;
+	ctx->logger           = logger;
+	ctx->flags            = config->flags;
 	ctx->connection_count = conns;
-	ctx->channel_count = config->channel_count;
-	ctx->inet_port = config->port;
+	ctx->channel_count    = config->channel_count;
+	ctx->inet_port        = config->port;
 
 	ctx->client_gen = 0;
 	ctx->client_id  = 1;

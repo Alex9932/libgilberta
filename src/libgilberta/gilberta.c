@@ -508,7 +508,7 @@ int glb_tick(glbctx_t* ctx) {
 					// Resend packet
 					glbio_send(ctx, pkg_ptr, (struct sockaddr*)&con->peer_addr, addr_len);
 
-					if (con->channels[headerptr->channel_id].flags & GLB_CHANNEL_FLAG_RELIABLE == 0) {
+					if ((chan->flags & GLB_CHANNEL_FLAG_RELIABLE) == 0) {
 						// Not reliable channel, pop the packet from the queue to avoid infinite retransmission
 						glbqueue_pop(chan->s_queue, NULL);
 						continue;
@@ -557,6 +557,8 @@ int glb_tick(glbctx_t* ctx) {
 					event.disconnect.connection = con;
 					event.disconnect.reason = GLB_DISCONNECT_TIMEOUT;
 					glbqueue_push(ctx->eventqueue, &event);
+
+					continue;
 				}
 #else
 				if (con->keepalive_retry > GLB_KEEPALIVE_RETRY) {
