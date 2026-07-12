@@ -51,7 +51,7 @@ jobs:
     # --- Build ---
     - name: Build Library (Linux/macOS)
       if: runner.os != 'Windows'
-      run: make config=Release 
+      run: make config=release 
 
     - name: Build Library (Windows)
       if: runner.os == 'Windows'
