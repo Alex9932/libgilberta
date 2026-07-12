@@ -75,6 +75,7 @@
 #define GILBERTA_H
 
 #include <stdint.h>
+#include <stdlib.h>
 
 /* ================================= */
 /*  Platform-specific definitions    */

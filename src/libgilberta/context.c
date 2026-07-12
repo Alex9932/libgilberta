@@ -14,6 +14,7 @@
 #include "context.h"
 #include "glbio.h"
 #include <stdio.h>
+#include <stdlib.h>
 
 #if defined(GILBERTA_WINDOWS)
 static int winsock_usage = 0;
@@ -84,7 +85,11 @@ static int GLB_CreateSocket(glbctx_t* ctx, const glbcfg_t* config) {
 
 static int GLB_CloseSocket(glbctx_t* ctx) {
 	if (ctx->sock != SOCKET_NULL_HANDLE) {
+#if defined(GILBERTA_WINDOWS)
 		closesocket(ctx->sock);
+#else
+		close(ctx->sock);
+#endif
 		ctx->sock = SOCKET_NULL_HANDLE;
 	}
 	return GLB_SUCCESS;
