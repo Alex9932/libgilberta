@@ -1,4 +1,4 @@
-workspace "netlib"
+workspace "gilberta"
 	configurations { "Debug", "Release" }
 	architecture "x86_64"
 	location "build"

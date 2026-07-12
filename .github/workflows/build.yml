@@ -1,0 +1,71 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    # --- Install Premake5 ---
+    - name: Install Premake5 (Linux/macOS)
+      if: runner.os != 'Windows'
+      run: |
+        if [ "$RUNNER_OS" == "Linux" ]; then
+          wget -q https://github.com/premake/premake-core/releases/download/v5.0.0-beta2/premake-5.0.0-beta2-linux.tar.gz
+          tar -xzf premake-5.0.0-beta2-linux.tar.gz
+        else
+          wget -q https://github.com/premake/premake-core/releases/download/v5.0.0-beta2/premake-5.0.0-beta2-macosx.tar.gz
+          tar -xzf premake-5.0.0-beta2-macosx.tar.gz
+        fi
+        chmod +x premake5
+        sudo mv premake5 /usr/local/bin/
+
+    - name: Install Premake5 (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        Invoke-WebRequest -Uri "https://github.com/premake/premake-core/releases/download/v5.0.0-beta2/premake-5.0.0-beta2-windows.zip" -OutFile "premake.zip"
+        Expand-Archive -Path premake.zip -DestinationPath .
+        Move-Item -Path premake5.exe -Destination C:\Windows\System32\
+
+    # --- Generate projects ---
+    - name: Generate Makefiles (Linux/macOS)
+      if: runner.os != 'Windows'
+      run: premake5 gmake2
+
+    - name: Generate Visual Studio Project (Windows)
+      if: runner.os == 'Windows'
+      run: premake5 vs2022
+
+    # --- Build ---
+    - name: Build Library (Linux/macOS)
+      if: runner.os != 'Windows'
+      run: make config=Release 
+
+    - name: Build Library (Windows)
+      if: runner.os == 'Windows'
+      run: msbuild gilberta.sln /p:Configuration=Release /p:Platform=x64
+
+    # --- Upload Artifacts ---
+    - name: Upload Build Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: libgilberta-${{ matrix.os }}
+        path: |
+          bin/
+          lib/
+          *.dll
+          *.so
+          *.dylib
+        if-no-files-found: warn
