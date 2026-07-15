@@ -186,14 +186,21 @@ int glb_tick(glbctx_t* ctx) {
 			// Send SYN ACK
 			// Start timer for ACK wait
 
-			glbconn_t* con = glbctx_findemptyconn(ctx);
+			// Find connection by address (if already exists, resend SYN ACK)
+			glbconn_t* con = glbctx_findconnbyaddr(ctx, &from_addr);
 			if (!con) {
-				// No empty slot, send RST
-				// Or ignore it
+				// No such connection, find empty slot
+				con = glbctx_findemptyconn(ctx);
+				// Generate new client id
+				glbctx_generateclientid(ctx, &con->conn_id);
+			}
+
+			if (!con) {
+				// No empty slot, send RST or ignore it
 				continue;
 			}
 
-			glbctx_generateclientid(ctx, &con->conn_id);
+			// Send or resend SYN ACK
 			con->state = GLB_CONNECTION_SYN_RCVD;
 			con->retry = 0;
 			con->peer_addr = from_addr;
@@ -238,7 +245,6 @@ int glb_tick(glbctx_t* ctx) {
 		}
 
 		// SYN ACK only
-		//if ((headerptr->ctrl_flags & glb_syn_ack) == glb_syn_ack) {
 		if (headerptr->ctrl_flags == glb_syn_ack) {
 			// Server is sent SYN ACK (client mode)
 			// Set client id from server

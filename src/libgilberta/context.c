@@ -281,3 +281,14 @@ glbconn_t* glbctx_findconn(glbctx_t* ctx, uint16_t gen, uint16_t id) {
 	}
 	return NULL;
 }
+
+glbconn_t* glbctx_findconnbyaddr(glbctx_t* ctx, glbaddr_t* addr) {
+	for (size_t i = 0; i < ctx->connection_count; i++) {
+		glbconn_t* con = &ctx->connections[i];
+		if (con->peer_addr.sin_addr.s_addr == addr->sin_addr.s_addr &&
+			con->peer_addr.sin_port == addr->sin_port) {
+			return con;
+		}
+	}
+	return NULL;
+}

@@ -155,6 +155,18 @@ glbconn_t* glbctx_findemptyconn(glbctx_t* ctx);
  */
 glbconn_t* glbctx_findconn(glbctx_t* ctx, uint16_t gen, uint16_t id);
 
+/*
+ * @brief Find a connection by address.
+ * 
+ * @param ctx Context (not NULL).
+ * @param addr Address to search for (not NULL).
+ * 
+ * @return Pointer to the connection or NULL if not found.
+ * 
+ * @see glbaddr_t
+ */
+glbconn_t* glbctx_findconnbyaddr(glbctx_t* ctx, glbaddr_t* addr);
+
 /**
  * @brief Create channels for a connection.
  *
