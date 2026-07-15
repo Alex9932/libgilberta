@@ -97,7 +97,7 @@ static int GLB_CloseSocket(glbctx_t* ctx) {
 
 static int GLB_BindSocket(glbctx_t* ctx, const glbcfg_t* config) {
 	char logbuf[256];
-	struct sockaddr_in server_addr;
+	struct sockaddr_in server_addr = { 0 };
 	server_addr.sin_family = AF_INET;
 	server_addr.sin_port = htons(ctx->inet_port);
 	inet_pton(AF_INET, ctx->inet_addr, &server_addr.sin_addr);

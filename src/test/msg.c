@@ -58,7 +58,7 @@ static int ProcessArgs(int argc, char** argv) {
 	return 0;
 }
 
-void LaunchClient() {
+static void LaunchClient() {
 	log_callback(GLB_LOG_INFO, "Starting Gilberta Messenger client...");
 
 	char username[64];
@@ -114,6 +114,7 @@ void LaunchClient() {
 				}
 				case GLB_EVENT_DISCONNECT: {
 					log_callback(GLB_LOG_INFO, "Disconnected from the server");
+					connection = NULL;
 					keep_running = 0;
 					break;
 				}
@@ -173,11 +174,26 @@ void LaunchClient() {
 	join_thread(thread);
 	mutex_destroy(&mutex);
 
+	if (connection) {
+		// Close connection gracefully
+		log_callback(GLB_LOG_INFO, "Closing connection");
+		glb_close(connection);
+		while (1) {
+			glb_tick(ctx);
+			glbevent_t event;
+			while (glb_pollevent(ctx, &event) == GLB_SUCCESS) {
+				if (event.type == GLB_EVENT_DISCONNECT) {
+					goto end;
+				}
+			}
+		}
+	}
+	end:
 	// Free context
 	glb_destroy(ctx);
 }
 
-void LaunchServer() {
+static void LaunchServer() {
 	log_callback(GLB_LOG_INFO, "Starting Gilberta Messenger server...");
 
 	glbcfg_t config = { 0 };

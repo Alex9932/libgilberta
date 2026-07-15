@@ -130,7 +130,7 @@ int glb_send(glbctx_t* ctx, glbsendinfo_t* info) {
 	glbpkg pkg;
 	glbpkg_init(&pkg, info->con->conn_id, GLB_CTRL_FLAG_DATA, info->channel_id);
 	pkg.header.seq = chan->seq;
-	pkg.header.payload_len = info->len;
+	pkg.header.payload_len = (uint16_t)info->len; // Just cast to uint16_t, because we already checked that info->len <= GILBERTA_MTU
 	pkg.retransmit_count = 0;
 	memcpy(pkg.data, info->data, info->len);
 
@@ -150,8 +150,8 @@ int glb_send(glbctx_t* ctx, glbsendinfo_t* info) {
 }
 
 int glb_tick(glbctx_t* ctx) {
-	glbpkg pkg;
-	struct sockaddr_in from_addr;
+	glbpkg pkg = { 0 };
+	struct sockaddr_in from_addr = { 0 };
 	socklen_t addr_len = sizeof(from_addr);
 	glbpkgheader* headerptr = (glbpkgheader*)&pkg;
 	void* dataptr = (void*)((char*)&pkg + sizeof(glbpkgheader));
@@ -232,7 +232,7 @@ int glb_tick(glbctx_t* ctx) {
 				glbctx_createconchannels(ctx, con);
 
 				// Generate event
-				glbevent_t event;
+				glbevent_t event = { 0 };
 				event.type = GLB_EVENT_CONNECT;
 				event.connect.connection = con;
 				glbqueue_push(ctx->eventqueue, &event);
@@ -261,7 +261,7 @@ int glb_tick(glbctx_t* ctx) {
 				glbctx_createconchannels(ctx, con);
 
 				// Generate event
-				glbevent_t event;
+				glbevent_t event = { 0 };
 				event.type = GLB_EVENT_CONNECT;
 				event.connect.connection = con;
 				glbqueue_push(ctx->eventqueue, &event);
@@ -296,7 +296,7 @@ int glb_tick(glbctx_t* ctx) {
 					glbctx_freeconchannels(ctx, con);
 					
 					// Generate event (Disconnect)
-					glbevent_t event;
+					glbevent_t event = { 0 };
 					event.type = GLB_EVENT_DISCONNECT;
 					event.disconnect.connection = con;
 					event.disconnect.reason = GLB_DISCONNECT_BY_PEER;
@@ -320,7 +320,7 @@ int glb_tick(glbctx_t* ctx) {
 				glbctx_freeconchannels(ctx, con);
 
 				// Generate event (Disconnect)
-				glbevent_t event;
+				glbevent_t event = { 0 };
 				event.type = GLB_EVENT_DISCONNECT;
 				event.disconnect.connection = con;
 				event.disconnect.reason = GLB_DISCONNECT_BY_PEER;
@@ -360,7 +360,7 @@ int glb_tick(glbctx_t* ctx) {
 				glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len);
 			}
 
-			glbevent_t event;
+			glbevent_t event = { 0 };
 			event.type = GLB_EVENT_RECEIVE;
 			event.receive.connection = con;
 			event.receive.channel = headerptr->channel_id;
@@ -402,7 +402,7 @@ int glb_tick(glbctx_t* ctx) {
 				continue;
 			}
 #endif
-			glbconid_t conn_id;
+			glbconid_t conn_id = { 0 };
 			conn_id.generation = headerptr->client_gen;
 			conn_id.id = headerptr->client_id;
 			glbpkg_init(&pkg, conn_id, GLB_CTRL_FLAG_PONG, headerptr->channel_id);
@@ -442,7 +442,7 @@ int glb_tick(glbctx_t* ctx) {
 				con->state = GLB_CONNECTION_CLOSED;
 
 				// Generate event (Connect failed)
-				glbevent_t event;
+				glbevent_t event = { 0 };
 				event.type = GLB_EVENT_DISCONNECT;
 				event.disconnect.connection = con;
 				event.disconnect.reason = GLB_DISCONNECT_TIMEOUT;
@@ -484,7 +484,7 @@ int glb_tick(glbctx_t* ctx) {
 				glbctx_freeconchannels(ctx, con);
 
 				// Generate event (Disconnect)
-				glbevent_t event;
+				glbevent_t event = { 0 };
 				event.type = GLB_EVENT_DISCONNECT;
 				event.disconnect.connection = con;
 				event.disconnect.reason = GLB_DISCONNECT_TIMEOUT;
@@ -560,7 +560,7 @@ int glb_tick(glbctx_t* ctx) {
 					glbctx_freeconchannels(ctx, con);
 
 					// Generate event (Disconnect)
-					glbevent_t event;
+					glbevent_t event = { 0 };
 					event.type = GLB_EVENT_DISCONNECT;
 					event.disconnect.connection = con;
 					event.disconnect.reason = GLB_DISCONNECT_TIMEOUT;

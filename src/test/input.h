@@ -60,6 +60,7 @@ THREAD_RET input_thread_func(void* arg) {
 
 #ifdef _WIN32
     _endthread();
+    return 0;
 #else
     return NULL;
 #endif
