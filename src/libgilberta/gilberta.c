@@ -196,8 +196,16 @@ int glb_tick(glbctx_t* ctx) {
 			}
 
 			if (!con) {
-				// No empty slot, send RST or ignore it
+				// No empty slot, send RST
+
+				glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_RST, 0);
+				glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len);
+
 				continue;
+			}
+
+			if (con->state == GLB_CONNECTION_ESTABLISHED) {
+				continue; // Skip SYN for established connection
 			}
 
 			// Send or resend SYN ACK
@@ -251,9 +259,10 @@ int glb_tick(glbctx_t* ctx) {
 			// Send ACK
 			// Set connection as ESTABLISHED
 			glbconn_t* con = &ctx->connections[0];
-			con->conn_id.generation = headerptr->client_gen;
-			con->conn_id.id = headerptr->client_id;
-			//glbtime_start(&con->time, 0);
+			if (con->state == GLB_CONNECTION_SYN_SENT) {
+				con->conn_id.generation = headerptr->client_gen;
+				con->conn_id.id = headerptr->client_id;
+			}
 
 			if (con->state != GLB_CONNECTION_ESTABLISHED) {
 
@@ -426,6 +435,32 @@ int glb_tick(glbctx_t* ctx) {
 			glbtime_start(&con->keepalive, GLB_KEEPALIVE_TIME);
 
 			continue;
+		}
+
+		// RST only
+		if (headerptr->ctrl_flags == GLB_CTRL_FLAG_RST) {
+			// Peer sent RST, close connection (if not closed)
+
+			glbconn_t* con = glbctx_findconn(ctx, headerptr->client_gen, headerptr->client_id);
+			if (!con) {
+				// No such connection, ignore
+				continue;
+			}
+
+			if (con->state == GLB_CONNECTION_ESTABLISHED) {
+				// Free queues
+				glbctx_freeconchannels(ctx, con);
+			}
+
+			con->state = GLB_CONNECTION_CLOSED;
+
+			// Generate event GLB_DISCONNECT_RESET
+			glbevent_t event = { 0 };
+			event.type = GLB_EVENT_DISCONNECT;
+			event.disconnect.connection = con;
+			event.disconnect.reason = GLB_DISCONNECT_RESET;
+			glbqueue_push(ctx->eventqueue, &event);
+
 		}
 	}
 
@@ -652,6 +687,7 @@ const char* glb_getstring(uint32_t code) {
 		// Disconnect reasons
 		case GLB_DISCONNECT_BY_PEER:      return "Disconnected by peer";
 		case GLB_DISCONNECT_TIMEOUT:      return "Disconnected by timeout";
+		case GLB_DISCONNECT_RESET:        return "Connection reset";
 		// Events
 		case GLB_EVENT_CONNECT:           return "connect";
 		case GLB_EVENT_DISCONNECT:        return "disconnect";

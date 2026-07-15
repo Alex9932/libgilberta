@@ -159,7 +159,7 @@ int main() {
     glbevent_t ev;
     int running = 1;
     
-    while(!running) {
+    while(running) {
         glb_tick(ctx);
         while (glb_pollevent(ctx, &ev) == 0) {
 
@@ -191,7 +191,7 @@ Full API documentation is in the header file `libgilberta.h` (with Doxygen‑sty
 Key functions:
 
 - `glb_create` / `glb_destroy` – context lifecycle.
-- `glb_connect` – start listening (server) or connect (client).
+- `glb_connect` – connect to server (client only).
 - `glb_close` – close a specific connection.
 - `glb_send` – send data on a channel.
 - `glb_pollevent` – non‑blocking event retrieval.

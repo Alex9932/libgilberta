@@ -280,8 +280,9 @@ typedef struct glbconinfo_t {
  * @see glbevent_disconnect_t
  */
 typedef enum glb_disconnectreason_t {
-	GLB_DISCONNECT_BY_PEER = 128,  /**< Peer initiated closure (FIN/RST) */
+	GLB_DISCONNECT_BY_PEER = 128,  /**< Peer initiated closure (FIN) */
 	GLB_DISCONNECT_TIMEOUT,        /**< Response timeout exceeded */
+	GLB_DISCONNECT_RESET,          /**< Forced the connection to close */
 	GLB_DISCONNECT_MAX_ENUM = 0x9F
 } glb_disconnectreason_t;
 
@@ -322,18 +323,28 @@ typedef struct glbevent_disconnect_t {
 
 /**
  * @struct glbevent_recieve_t
- * @brief Data for GLB_EVENT_RECIEVE event.
+ * @brief Data for GLB_EVENT_RECEIVE event.
  *
- * @warning The data and length fields are populated by the library. The data pointer
- *          is valid only until the next call to glb_pollevent().
+ * @see glbrecvinfo_t @see glb_popdata()
  */
 typedef struct glbevent_receive_t {
 	glbconn_t* connection; /**< Connection from which data was received */
 	uint8_t    channel;    /**< Channel ID */
 	uint8_t    _padding0;  /**< Padding */
 	uint16_t   _padding1;  /**< Padding */
-	uint32_t   _padding2;  /**< Padding */
 } glbevent_receive_t;
+
+/**
+ * @struct glbevent_error_t
+ * @brief Data for GLB_EVENT_ERROR event.
+ * 
+ * For future use
+ * 
+ */
+typedef struct glbevent_error_t {
+	glbconn_t* connection; /**< Connection where the error occurred (can be NULL) */
+	int        error_code; /**< Error code (GLBErrorCode) */
+} glbevent_error_t;
 
 /**
  * @struct glbevent_t
@@ -350,6 +361,7 @@ typedef struct glbevent_t {
 		glbevent_connect_t    connect;    /**< Data for GLB_EVENT_CONNECT */
 		glbevent_disconnect_t disconnect; /**< Data for GLB_EVENT_DISCONNECT */
 		glbevent_receive_t    receive;    /**< Data for GLB_EVENT_RECEIVE */
+		glbevent_error_t      error;      /**< Data for GLB_EVENT_ERROR */
 		char                  _raw[56];   /**< Raw data (for fix structure length) */
 	};
 } glbevent_t;
