@@ -137,8 +137,6 @@ int glb_send(glbctx_t* ctx, glbsendinfo_t* info) {
 	// Add timestamp (for retransmission)
 	glbtime_start(&pkg.timestamp, 0); // After first send glbtime_start(&pkg.timestamp, GLB_RETRANSMISSION_TIMEOUT);
 
-	// TODO: Add seq
-
 	// Add data to the send queue
 	int res = glbqueue_push(chan->s_queue, &pkg);
 	if (res == GLB_ERROR_QUEUE_FULL) {
@@ -355,17 +353,31 @@ int glb_tick(glbctx_t* ctx) {
 				continue;
 			}
 
+			// Сheck sequence number, drop duplicates, etc.
+
+			if (headerptr->seq <= con->channels[headerptr->channel_id].ack) {
+				// Old packet, send ACK
+				if (con->channels[headerptr->channel_id].flags & GLB_CHANNEL_FLAG_RELIABLE) {
+					glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_ACK | GLB_CTRL_FLAG_DATA, headerptr->channel_id);
+					pkg.header.ack = headerptr->seq;
+					pkg.header.seq = con->channels[headerptr->channel_id].seq;
+					glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len);
+				}
+				continue;
+			}
+
 			// TODO: check peer address
 
 			glbqueue* queue = con->channels[headerptr->channel_id].r_queue;
 			glbqueue_push(queue, &pkg);
 
-			// TODO: check sequence number, drop duplicates, etc.
 			con->channels[headerptr->channel_id].ack = headerptr->seq; // Update ack for this channel
 
 			// Send ACK for this data packet if reliable delivery channel
 			if (con->channels[headerptr->channel_id].flags & GLB_CHANNEL_FLAG_RELIABLE) {
 				glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_ACK | GLB_CTRL_FLAG_DATA, headerptr->channel_id);
+				pkg.header.ack = headerptr->seq;
+				pkg.header.seq = con->channels[headerptr->channel_id].seq;
 				glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len);
 			}
 
@@ -395,8 +407,9 @@ int glb_tick(glbctx_t* ctx) {
 				continue;
 			}
 
-			//TODO:
-			// con->channels[headerptr->channel_id].ack = headerptr->ack;
+			// TODO: add seq check
+
+			con->channels[headerptr->channel_id].ack = headerptr->ack;
 			glbqueue_pop(con->channels[headerptr->channel_id].s_queue, NULL); // Remove acknowledged packet from send queue
 
 			continue;

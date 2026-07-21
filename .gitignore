@@ -4,6 +4,7 @@ obj/
 docs/html
 *.slnx
 *.vcxproj
+*.user
 Makefile
 *.make
 *.xcworkspace
