@@ -189,17 +189,17 @@ int glb_tick(glbctx_t* ctx) {
 			if (!con) {
 				// No such connection, find empty slot
 				con = glbctx_findemptyconn(ctx);
+
+				if (!con) {
+					// No empty slot, send RST
+					glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_RST, 0);
+					glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len);
+
+					continue;
+				}
+
 				// Generate new client id
 				glbctx_generateclientid(ctx, &con->conn_id);
-			}
-
-			if (!con) {
-				// No empty slot, send RST
-
-				glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_RST, 0);
-				glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len);
-
-				continue;
 			}
 
 			if (con->state == GLB_CONNECTION_ESTABLISHED) {
@@ -354,7 +354,7 @@ int glb_tick(glbctx_t* ctx) {
 			}
 
 			// Сheck sequence number, drop duplicates, etc.
-
+#if 0
 			if (headerptr->seq <= con->channels[headerptr->channel_id].ack) {
 				// Old packet, send ACK
 				if (con->channels[headerptr->channel_id].flags & GLB_CHANNEL_FLAG_RELIABLE) {
@@ -365,6 +365,7 @@ int glb_tick(glbctx_t* ctx) {
 				}
 				continue;
 			}
+#endif
 
 			// TODO: check peer address
 
@@ -407,10 +408,23 @@ int glb_tick(glbctx_t* ctx) {
 				continue;
 			}
 
-			// TODO: add seq check
+			glbchannel_t* channel = &con->channels[headerptr->channel_id];
 
-			con->channels[headerptr->channel_id].ack = headerptr->ack;
-			glbqueue_pop(con->channels[headerptr->channel_id].s_queue, NULL); // Remove acknowledged packet from send queue
+#if 0
+			if (headerptr->ack > channel->seq) {
+				continue;
+			}
+			glbpkg* pkgptr = NULL;
+			if (glbqueue_peek(channel->s_queue, &pkgptr) == GLB_SUCCESS) {
+				// NULL check not needed
+				// Check seq number
+				if (pkgptr->header.seq != headerptr->ack) {
+					continue;
+				}
+			}
+#endif
+			channel->ack = headerptr->ack;
+			glbqueue_pop(channel->s_queue, NULL); // Remove acknowledged packet from send queue
 
 			continue;
 		}
@@ -646,6 +660,10 @@ int glb_pollevent(glbctx_t* ctx, glbevent_t* event) {
 int glb_popdata(glbctx_t* ctx, glbrecvinfo_t* info) {
 	// Implementation for popping data
 	if (!ctx ||!info || !info->con || !info->buffer || info->buflen == 0) {
+		return GLB_ERROR_INVALID_ARGUMENT;
+	}
+
+	if (info->channel_id >= ctx->channel_count) {
 		return GLB_ERROR_INVALID_ARGUMENT;
 	}
 
