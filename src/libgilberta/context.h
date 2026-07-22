@@ -73,7 +73,7 @@ struct glbctx_t {
 	uint32_t      _padding2;        /**< Padding */
 	char          inet_addr[128];   /**< Local IP address (string) */
 
-	glbchan_t     channel_configs[256]; /**< Channel configurations (length = channel_count) */
+	glbchan_t*    channel_configs;  /**< Channel configurations (length = channel_count) */
 };
 
 /* ================================= */
@@ -196,5 +196,27 @@ int glbctx_createconchannels(glbctx_t* ctx, glbconn_t* con);
  * @see glbctx_createconchannels()
  */
 int glbctx_freeconchannels(glbctx_t* ctx, glbconn_t* con);
+
+/**
+ * @brief Generate new sequence number for connection.
+ * 
+ * @param ctx Context (not NULL).
+ * @param con Connection to generate new sequence (not NULL).
+ * @param ack ACK number.
+ * @return GLB_SUCCESS on success, GLB_ERROR_INVALID_ARGUMENT if con == NULL.
+ * 
+ */
+int glbctx_generateseq(glbctx_t* ctx, glbconn_t* con, uint32_t ack);
+
+/**
+ * @brief Populate ack number for channels in connection.
+ *
+ * @param ctx Context (not NULL).
+ * @param con Connection to generate new sequence (not NULL).
+ * @param ack ACK number.
+ * @return GLB_SUCCESS on success, GLB_ERROR_INVALID_ARGUMENT if con == NULL.
+ *
+ */
+int glbctx_writeack(glbctx_t* ctx, glbconn_t* con, uint32_t ack);
 
 #endif

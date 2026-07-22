@@ -19,6 +19,8 @@
 
 #include <string.h>
 
+#include <stdio.h>
+
 // For debug:
 // DL  - Data length (payload length)
 // V   - Version
@@ -76,6 +78,8 @@ int glb_connect(glbctx_t* ctx) {
 
 	// Use first element in client mode
 	glbconn_t* con = &ctx->connections[0];
+
+	glbctx_generateseq(ctx, con, 0);
 
 	con->conn_id.generation = 0x00;
 	con->conn_id.id = 0xFFFF;
@@ -192,14 +196,16 @@ int glb_tick(glbctx_t* ctx) {
 
 				if (!con) {
 					// No empty slot, send RST
-					glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_RST, 0);
+					glbconid_t id = { .generation = 0, .id = 0xFFFF };
+					glbpkg_init(&pkg, id, GLB_CTRL_FLAG_RST, 0);
 					glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len);
 
 					continue;
 				}
 
-				// Generate new client id
+				// Generate new client id & sequence
 				glbctx_generateclientid(ctx, &con->conn_id);
+				glbctx_generateseq(ctx, con, pkg.header.seq); // New seq, sync ack
 			}
 
 			if (con->state == GLB_CONNECTION_ESTABLISHED) {
@@ -231,17 +237,25 @@ int glb_tick(glbctx_t* ctx) {
 				continue;
 			}
 
+			if (pkg.header.ack != con->seq || pkg.header.seq != con->ack) {
+				// TODO
+				// Error: Desync
+				ctx->logger(GLB_LOG_ERROR, "[gilberta] Connection desync!");
+			}
+
 			if (con->state != GLB_CONNECTION_ESTABLISHED) {
 				con->state = GLB_CONNECTION_ESTABLISHED;
 
 				// Make channels
 				glbctx_createconchannels(ctx, con);
-
+				glbctx_writeack(ctx, con, pkg.header.seq);
 				// Generate event
 				glbevent_t event = { 0 };
 				event.type = GLB_EVENT_CONNECT;
 				event.connect.connection = con;
 				glbqueue_push(ctx->eventqueue, &event);
+
+				printf("Connection established! SEQ: %u, ACK: %u\n", con->channels[0].seq, con->channels[0].ack);
 
 				con->keepalive_retry = 0;
 				glbtime_start(&con->keepalive, GLB_KEEPALIVE_TIME); // Start timer for PING (keep-alive)
@@ -278,7 +292,17 @@ int glb_tick(glbctx_t* ctx) {
 
 			} // Else just resend ACK for SYN ACK server packet
 
+			if (con->seq != pkg.header.ack) {
+				// TODO
+				// Error: Desync
+				ctx->logger(GLB_LOG_ERROR, "[gilberta] Connection desync!");
+			}
+
+			glbctx_writeack(ctx, con, pkg.header.seq);
+			printf("Connection established! SEQ: %u, ACK: %u\n", con->channels[0].seq, con->channels[0].ack);
 			glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_ACK, 0);
+			pkg.header.ack = con->channels[0].ack;
+			pkg.header.seq = con->channels[0].seq;
 			if (glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len) == GLB_SUCCESS) {
 				con->state = GLB_CONNECTION_ESTABLISHED;
 			}
@@ -368,17 +392,19 @@ int glb_tick(glbctx_t* ctx) {
 #endif
 
 			// TODO: check peer address
+			glbchannel_t* channel = &con->channels[headerptr->channel_id];
 
-			glbqueue* queue = con->channels[headerptr->channel_id].r_queue;
+			glbqueue* queue = channel->r_queue;
 			glbqueue_push(queue, &pkg);
 
-			con->channels[headerptr->channel_id].ack = headerptr->seq; // Update ack for this channel
+
+			channel->ack = headerptr->seq; // Update ack for this channel
 
 			// Send ACK for this data packet if reliable delivery channel
-			if (con->channels[headerptr->channel_id].flags & GLB_CHANNEL_FLAG_RELIABLE) {
+			if (channel->flags & GLB_CHANNEL_FLAG_RELIABLE) {
 				glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_ACK | GLB_CTRL_FLAG_DATA, headerptr->channel_id);
-				pkg.header.ack = headerptr->seq;
-				pkg.header.seq = con->channels[headerptr->channel_id].seq;
+				pkg.header.ack = channel->ack;
+				pkg.header.seq = channel->seq;
 				glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len);
 			}
 
@@ -514,6 +540,8 @@ int glb_tick(glbctx_t* ctx) {
 			}
 
 			glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_SYN, 0);
+			pkg.header.seq = con->seq;
+			pkg.header.ack = con->ack;
 			glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len);
 			// And start new timer
 			glbtime_start(&con->time, GLB_RETRY_TIMEOUT * (con->retry + 1));
@@ -530,7 +558,8 @@ int glb_tick(glbctx_t* ctx) {
 			}
 
 			glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_SYN | GLB_CTRL_FLAG_ACK, 0);
-
+			pkg.header.seq = con->seq;
+			pkg.header.ack = con->ack;
 			glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len);
 			// And start new timer
 			glbtime_start(&con->time, GLB_RETRY_TIMEOUT * (con->retry + 1));

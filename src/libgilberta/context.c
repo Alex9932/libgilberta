@@ -46,6 +46,11 @@ static void GWinSockDestroy(GLBLogFunc logger) {
 #endif
 
 static void GLB_DefaultLogger(GLBLogLevel level, const char* message) {
+#if defined(NDEBUG)
+	if (level == GLB_LOG_INFO || level == GLB_LOG_DEBUG) {
+		return; // Skip INFO & DEBUG in release build
+	}
+#endif
 	const char* level_str = "";
 	switch (level) {
 	case GLB_LOG_INFO:  level_str = "**"; break;
@@ -157,6 +162,9 @@ glbctx_t* glbctx_create(const glbcfg_t* config) {
 	GLBLogFunc logger = GLB_DefaultLogger;
 	glballoc_t galloc = { malloc, free };
 	if (!config) { return NULL; }
+	if (config->channel_count == 0) {
+		return NULL; // Invalid argument
+	}
 	if (config->alloc && config->alloc->malloc && config->alloc->free) {
 		galloc = *config->alloc;
 	}
@@ -172,7 +180,7 @@ glbctx_t* glbctx_create(const glbcfg_t* config) {
 		conns = config->max_connections;
 	}
 
-	glbctx_t* ctx = (glbctx_t*)galloc.malloc(sizeof(glbctx_t) + sizeof(glbconn_t) * (size_t)conns);
+	glbctx_t* ctx = (glbctx_t*)galloc.malloc(sizeof(glbctx_t) + sizeof(glbconn_t) * (size_t)conns + sizeof(glbchan_t) * config->channel_count);
 	if (!ctx) {
 		return NULL;
 	}
@@ -189,6 +197,12 @@ glbctx_t* glbctx_create(const glbcfg_t* config) {
 	ctx->client_id  = 1;
 	ctx->recv_limit = 0;
 
+
+	// glbconn_t array is placed right after glbctx_t structure
+	ctx->connections = (glbconn_t*)((char*)ctx + sizeof(glbctx_t));
+	// glbchan_t array is placed after glbchan_t array
+	ctx->channel_configs = (glbchan_t*)((char*)ctx->connections + sizeof(glbconn_t) * conns);
+
 	// Copy channels configuration
 	for (size_t i = 0; i < ctx->channel_count; i++) {
 		ctx->channel_configs[i] = config->channels[i];
@@ -197,8 +211,6 @@ glbctx_t* glbctx_create(const glbcfg_t* config) {
 	const char* ip = config->ip ? config->ip : "0.0.0.0";
 	snprintf(ctx->inet_addr, 128, "%s", ip);
 
-	// glbconn_t array is placed right after glbctx_t structure
-	ctx->connections = (glbconn_t*)((char*)ctx + sizeof(glbctx_t));
 	memset(ctx->connections, 0, sizeof(glbconn_t) * (size_t)conns);
 	for (size_t i = 0; i < ctx->connection_count; i++) {
 		ctx->connections[i].ctx   = ctx;
@@ -293,4 +305,29 @@ glbconn_t* glbctx_findconnbyaddr(glbctx_t* ctx, glbaddr_t* addr) {
 		}
 	}
 	return NULL;
+}
+
+int glbctx_generateseq(glbctx_t* ctx, glbconn_t* con, uint32_t ack) {
+	if (!ctx || !con) {
+		return GLB_ERROR_INVALID_ARGUMENT;
+	}
+
+	// TODO: Use random number
+	con->seq = (uint32_t)((size_t)ctx & 0xFFFFFFFF) ^ 0xA5A5A5A5;
+	con->ack = ack;
+
+	return GLB_SUCCESS;
+}
+
+int glbctx_writeack(glbctx_t* ctx, glbconn_t* con, uint32_t ack) {
+	if (!ctx || !con) {
+		return GLB_ERROR_INVALID_ARGUMENT;
+	}
+
+	for (size_t i = 0; i < ctx->channel_count; i++) {
+		con->channels[i].seq = con->seq;
+		con->channels[i].ack = ack;
+	}
+
+	return GLB_SUCCESS;
 }

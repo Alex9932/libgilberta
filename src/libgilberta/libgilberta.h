@@ -242,7 +242,7 @@ typedef struct glbcfg_t {
 	const char* ip;                /**< IPv4 address (NULL for server) */
 	uint16_t    port;              /**< Port (required) */
 	uint8_t     flags;             /**< Combination of GLB_FLAG_* */
-	uint8_t     channel_count;     /**< Number of channels (0 = channels not used) */
+	uint8_t     channel_count;     /**< Number of channels */
 	uint16_t    eventqueue_length; /**< Event queue size (recommended 32–256) */
 	uint16_t    max_connections;   /**< Max number of connections (for server) */
 	glballoc_t* alloc;             /**< Custom allocator (NULL = malloc/free) */
