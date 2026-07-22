@@ -15,6 +15,7 @@
 #include "glbio.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h> // memset
 
 #if defined(GILBERTA_WINDOWS)
 static int winsock_usage = 0;
