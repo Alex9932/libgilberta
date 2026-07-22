@@ -19,7 +19,8 @@ ENet is good, RakNet is heavy, and writing your own wheel is a tradition. Gilber
 
 - Simple non‑blocking API (send, poll, connect, close).
 - Cross‑platform: Windows (MSVC), Linux, macOS (POSIX).
-- Channel‑based messaging with priority levels.
+- Little‑endian architectures only (x86/x86‑64, ARM/ARM64, RISC‑V). No big‑endian support.
+- Channel‑based messaging with priority levels (last one is not implemented yet).
 - UDP transport with control flags (SYN/ACK/FIN/RST/PING).
 - Reliable delivery option with retransmission and ordering.
 - Custom memory allocator and logging hooks.
@@ -30,14 +31,22 @@ ENet is good, RakNet is heavy, and writing your own wheel is a tradition. Gilber
 | Field          | Type      | Description |
 |----------------|-----------|-------------|
 | `magic`        | uint16_t  | Gilberta packet identifier |
+| `payload_len`  | uint16_t  | Payload length |
 | `version`      | uint8_t   | Protocol version |
 | `channel_id`   | uint8_t   | Channel ID (0–255) |
-| `payload_len`  | uint16_t  | Payload length |
-| `reserved`     | uint8_t   | Reserved (must be 0) |
+| `chan_flags`   | uint8_t   | Reserved (must be 0) |
 | `ctrlflags`    | uint8_t   | SYN / ACK / PING / FIN / RST |
 | `client_gen`   | uint16_t  | Generation counter (default 0) |
 | `client_id`    | uint16_t  | Client ID (0xFFFF for initiation) |
-| `reserved`     | uint32_t  | Reserved (must be 0) |
+| `checksum`     | uint16_t  | CRC16 Modbus of data (0xFFFF if no data) |
+| `wnd`          | uint16_t  | Window size (flow control) |
+| `seq`          | uint32_t  | Sequence number |
+| `ack`          | uint32_t  | Acknowledgment number |
+> ⚠️ **Endianness:** all multi-byte header fields are transmitted in host byte order
+> with no conversion. Gilberta currently supports **little-endian hosts only**
+> (x86/x86-64, ARM/ARM64, RISC-V). Communication between little-endian and
+> big-endian machines (e.g. s390x, classic PowerPC/SPARC) is **not supported**
+> and will corrupt packets silently.
 
 ## ⚙️ Building
 
@@ -77,7 +86,7 @@ The output (static/dynamic library) will be placed in `bin/` or `lib/`.
 int main() {
     glbchan_t channel = {
         .priority = 0,                        // highest priority (not implemented yet)
-        .reliable = GLB_CHANNEL_FLAG_RELIABLE // reliable delivery
+        .flags    = GLB_CHANNEL_FLAG_RELIABLE // reliable delivery
     };
 
     glbcfg_t cfg = {
@@ -92,18 +101,30 @@ int main() {
         .channels = &channel         // channel params
     };
 
+    char buffer[1024] = {0};
+    glbrecvinfo_t recvinfo = {
+        .buffer = buffer,
+        .buflen = 1024
+    };
+
     glbctx_t* ctx = glb_create(&cfg);
     if (!ctx) return 1;
     while(1) {
         glb_tick(ctx);
         glbevent_t ev;
-        while (glb_pollevent(ctx, &ev)) {
+        while (glb_pollevent(ctx, &ev) == GLB_SUCCESS) {
             switch (ev.type) {
                 case GLB_EVENT_CONNECT:
                     puts("New connection");
                     break;
-                case GLB_EVENT_RECIEVE:
-                    printf("Received %zu bytes\n", ev.recieve.length);
+                case GLB_EVENT_RECEIVE:
+                    recvinfo.con = ev.receive.connection;
+                    recvinfo.channel_id = ev.receive.channel;
+                    if (glb_popdata(ctx, &recvinfo) == GLB_SUCCESS) {
+                        printf("Received %zu bytes\n", recvinfo.datalen);
+                    } else {
+                        printf("Failed to pop data!");
+                    }
                     break;
                 case GLB_EVENT_DISCONNECT:
                     puts("Disconnected");
@@ -127,7 +148,7 @@ int main() {
 int main() {
     glbchan_t channel = {
         .priority = 0,                        // highest priority (not implemented yet)
-        .reliable = GLB_CHANNEL_FLAG_RELIABLE // reliable delivery
+        .flags    = GLB_CHANNEL_FLAG_RELIABLE // reliable delivery
     };
 
     glbcfg_t cfg = {
@@ -150,7 +171,7 @@ int main() {
     glbsendinfo_t info = {
         .data = msg,
         .len = strlen(msg) + 1,
-        .conn = NULL,
+        .con = NULL,
         .channel_id = 0
     };
     
@@ -161,7 +182,7 @@ int main() {
     
     while(running) {
         glb_tick(ctx);
-        while (glb_pollevent(ctx, &ev) == 0) {
+        while (glb_pollevent(ctx, &ev) == GLB_SUCCESS) {
 
             // Wait for GLB_EVENT_CONNECT before sending
             if (ev.type == GLB_EVENT_CONNECT) {

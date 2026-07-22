@@ -47,7 +47,7 @@
  *   - Transfer control mechanisms (reliable delivery, retransmission, ordering)
  *
  * Protocol design (packet header):
- *   [Header] (16 bytes)
+ *   [Header] (24 bytes)
  *    uint16_t magic        // Magic number to identify Gilberta packets
  *    uint16_t payload_len; // Payload length
  *    uint8_t  version;     // Protocol version (1)
