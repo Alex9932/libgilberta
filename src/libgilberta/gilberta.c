@@ -201,7 +201,7 @@ int glb_tick(glbctx_t* ctx) {
 					// No empty slot, send RST
 					glbconid_t id = { .generation = 0, .id = 0xFFFF };
 					glbpkg_init(&pkg, id, GLB_CTRL_FLAG_RST, 0);
-					glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len);
+					glbio_send(ctx, &pkg, (struct sockaddr*)&from_addr, addr_len);
 
 					continue;
 				}

@@ -48,7 +48,7 @@ int glbqueue_push(glbqueue* queue, const void* element) {
 	if (!queue) { return GLB_ERROR_INVALID_ARGUMENT; }
 
 	if (queue->length >= queue->capacity) {
-		queue->ctx->logger(GLB_LOG_WARN, "[gilberta] Queue is full, cannot push new element");
+		//queue->ctx->logger(GLB_LOG_WARN, "[gilberta] Queue is full, cannot push new element");
 		return GLB_ERROR_QUEUE_FULL;
 	}
 
@@ -69,7 +69,7 @@ int glbqueue_pop(glbqueue* queue, void* out_element) {
 	if (!queue) { return GLB_ERROR_INVALID_ARGUMENT; }
 
 	if (queue->length == 0) {
-		queue->ctx->logger(GLB_LOG_WARN, "[gilberta] Queue is empty, cannot pop element");
+		//queue->ctx->logger(GLB_LOG_WARN, "[gilberta] Queue is empty, cannot pop element");
 		return GLB_ERROR_QUEUE_EMPTY;
 	}
 
@@ -90,7 +90,7 @@ int glbqueue_peek(glbqueue* queue, void* out_element) {
 	if (!queue || !out_element) { return GLB_ERROR_INVALID_ARGUMENT; }
 
 	if (queue->length == 0) {
-		queue->ctx->logger(GLB_LOG_WARN, "[gilberta] Queue is empty, cannot peek element");
+		//queue->ctx->logger(GLB_LOG_WARN, "[gilberta] Queue is empty, cannot peek element");
 		return GLB_ERROR_QUEUE_EMPTY;
 	}
 
@@ -103,7 +103,7 @@ int glbqueue_peek(glbqueue* queue, void** out_element) {
 	// Check for NULL pointers and empty queue
 	if (!queue || !out_element) { return GLB_ERROR_INVALID_ARGUMENT; }
 	if (queue->length == 0) {
-		queue->ctx->logger(GLB_LOG_WARN, "[gilberta] Queue is empty, cannot peek element");
+		//queue->ctx->logger(GLB_LOG_WARN, "[gilberta] Queue is empty, cannot peek element");
 		return GLB_ERROR_QUEUE_EMPTY;
 	}
 
