@@ -236,19 +236,19 @@ static void LaunchServer() {
 }
 
 #if GLB_TEST_CLIENT
-int _main(int argc, char** argv);
-int ModuleMain(int argc, char** argv) {
+int _main(int argc, char** argv, Allocator* alloc);
+int ModuleMain(int argc, char** argv, Allocator* alloc) {
 	int _argc = 3;
 	char* _argv[] = {
 		argv[0],
 		"-c",
 		"127.0.0.1"
 	};
-	return _main(_argc, _argv);
+	return _main(_argc, _argv, alloc);
 }
-int _main(int argc, char** argv) {
+int _main(int argc, char** argv, Allocator* alloc) {
 #else
-int ModuleMain(int argc, char** argv) {
+int ModuleMain(int argc, char** argv, Allocator* alloc) {
 #endif
 
 	log_callback(GLB_LOG_INFO, "Process args");
@@ -260,8 +260,8 @@ int ModuleMain(int argc, char** argv) {
 	log_callback(GLB_LOG_INFO, "Starting gilberta example...");
 
 	// Setup common configuration for both client and server
-	allocator.malloc = malloc;
-	allocator.free   = free;
+	allocator.malloc = alloc->mallocptr;
+	allocator.free   = alloc->freeptr;
 	logger.log_func  = log_callback;
 
 	channels[0].flags    = 0;

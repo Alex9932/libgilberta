@@ -8,12 +8,21 @@
 
 #define GLB_TEST_CLIENT 0 // Force client mode for testing (connect to 127.0.0.1:12345)
 
+#include <stdlib.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-int ModuleMain(int argc, char** argv);
+typedef void* (*pfn_malloc)(size_t len);
+typedef void  (*pfn_free)(void* ptr);
+
+typedef struct Allocator {
+	pfn_malloc mallocptr;
+	pfn_free   freeptr;
+} Allocator;
+
+int ModuleMain(int argc, char** argv, Allocator* alloc);
 
 #ifdef __cplusplus
 }
