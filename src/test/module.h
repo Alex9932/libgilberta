@@ -1,8 +1,9 @@
 #ifndef MODULE_H
 #define MODULE_H
 
-#define TESTMODULE_ECHO 0 // Example echo server/client
-#define TESTMODULE_MSG  1 // Simple console messanger
+#define TESTMODULE_ECHO  0 // Example echo server/client
+#define TESTMODULE_MSG   0 // Simple console messanger
+#define TESTMODULE_SPEED 1 // Speed test
 
 #define GLB_GENERATE_CRC16_TABLE 0 // Generate CRC16 table for testing purposes
 
