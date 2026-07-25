@@ -151,7 +151,7 @@ typedef struct glbconn_t {
 #define GLB_CTRL_FLAG_PONG 0x08
 /** @brief DATA — packet with data. */
 #define GLB_CTRL_FLAG_DATA 0x10
-/** @brief Reserved for future use. */
+/** @brief Reserved for future use. (TODO: Use this as RESYNC flag?)*/
 #define GLB_CTRL_FLAG_RES1 0x20
 /** @brief FIN  — graceful shutdown. */
 #define GLB_CTRL_FLAG_FIN  0x40

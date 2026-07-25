@@ -134,12 +134,15 @@ int glb_send(glbctx_t* ctx, glbsendinfo_t* info) {
 	glbpkg pkg;
 	glbpkg_init(&pkg, info->con->conn_id, GLB_CTRL_FLAG_DATA, info->channel_id);
 	pkg.header.seq = chan->seq;
+	pkg.header.ack = chan->ack;
 	pkg.header.payload_len = (uint16_t)info->len; // Just cast to uint16_t, because we already checked that info->len <= GILBERTA_MTU
 	pkg.retransmit_count = 0;
 	memcpy(pkg.data, info->data, info->len);
 
 	// Add timestamp (for retransmission)
 	glbtime_start(&pkg.timestamp, 0); // After first send glbtime_start(&pkg.timestamp, GLB_RETRANSMISSION_TIMEOUT);
+
+	//printf("ENQUEUED s:%u a:%u\n", pkg.header.seq, pkg.header.ack);
 
 	// Add data to the send queue
 	int res = glbqueue_push(chan->s_queue, &pkg);
@@ -290,16 +293,23 @@ int glb_tick(glbctx_t* ctx) {
 				con->keepalive_retry = 0;
 				glbtime_start(&con->keepalive, GLB_KEEPALIVE_TIME); // Start timer for PING (keep-alive)
 
+				con->ack = pkg.header.seq;
+				glbctx_writeack(ctx, con, pkg.header.seq);
+				printf("Connection established! SEQ: %u, ACK: %u\n", con->channels[0].seq, con->channels[0].ack);
+
 			} // Else just resend ACK for SYN ACK server packet
 
-			if (con->seq != pkg.header.ack) {
+			if (con->seq != pkg.header.ack || con->ack != pkg.header.seq) {
 				// TODO
 				// Error: Desync
 				ctx->logger(GLB_LOG_ERROR, "[gilberta] Connection desync!");
+				printf("[gilberta] Channel (S: %u, A: %u), header (S: %u, A: %u), init (S: %u, A: %u)\n",
+					con->channels[0].seq, con->channels[0].ack,
+					headerptr->seq, headerptr->ack,
+					con->seq, con->ack
+				);
 			}
 
-			glbctx_writeack(ctx, con, pkg.header.seq);
-			printf("Connection established! SEQ: %u, ACK: %u\n", con->channels[0].seq, con->channels[0].ack);
 			glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_ACK, 0);
 			pkg.header.ack = con->channels[0].ack;
 			pkg.header.seq = con->channels[0].seq;
@@ -377,7 +387,39 @@ int glb_tick(glbctx_t* ctx) {
 				continue;
 			}
 
+			// TODO: check peer address
+			glbchannel_t* channel = &con->channels[headerptr->channel_id];
+			char buffer[128];
+
 			// Сheck sequence number, drop duplicates, etc.
+#if 1
+			if (headerptr->seq < channel->ack && channel->flags & GLB_CHANNEL_FLAG_RELIABLE) {
+				// Old packet
+				snprintf(buffer, 128, "[gilberta] Old packet detected! Sequence number %u, expected %u (channel: %u)", headerptr->seq, channel->ack, (uint32_t)headerptr->channel_id);
+				ctx->logger(GLB_LOG_DEBUG, buffer);
+
+				// Send ack
+
+				uint32_t ack = headerptr->seq; // Save sequence
+				glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_ACK | GLB_CTRL_FLAG_DATA, headerptr->channel_id);
+				pkg.header.ack = ack;
+				pkg.header.seq = channel->seq;
+				//printf("RESEND s:%u a:%u\n", pkg.header.seq, pkg.header.ack);
+				glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len);
+
+				continue;
+			}
+
+			if (headerptr->seq > channel->ack && channel->flags & GLB_CHANNEL_FLAG_RELIABLE) {
+				// packet from future
+#else
+			if (headerptr->seq != channel->ack) {
+#endif
+				snprintf(buffer, 128, "[gilberta] DESYNC! Sequence number %u, expected %u (channel: %u)", headerptr->seq, channel->ack, (uint32_t)headerptr->channel_id);
+				ctx->logger(GLB_LOG_ERROR, buffer);
+				continue;
+			}
+
 #if 0
 			if (headerptr->seq <= con->channels[headerptr->channel_id].ack) {
 				// Old packet, send ACK
@@ -391,20 +433,25 @@ int glb_tick(glbctx_t* ctx) {
 			}
 #endif
 
-			// TODO: check peer address
-			glbchannel_t* channel = &con->channels[headerptr->channel_id];
 
 			glbqueue* queue = channel->r_queue;
 			glbqueue_push(queue, &pkg);
 
+			//printf("[gilberta] DATA RECVD [channel seq:%u ack:%u] [header seq:%u ack:%u]\n",
+			//	channel->seq, channel->ack,
+			//	headerptr->seq, headerptr->ack
+			//);
 
-			channel->ack = headerptr->seq; // Update ack for this channel
+
+			channel->ack++;// = headerptr->seq; // Update ack for this channel
 
 			// Send ACK for this data packet if reliable delivery channel
 			if (channel->flags & GLB_CHANNEL_FLAG_RELIABLE) {
+				uint32_t ack = headerptr->seq; // Save sequence
 				glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_ACK | GLB_CTRL_FLAG_DATA, headerptr->channel_id);
-				pkg.header.ack = channel->ack;
+				pkg.header.ack = ack;
 				pkg.header.seq = channel->seq;
+				//printf("SEND s:%u a:%u\n", pkg.header.seq, pkg.header.ack);
 				glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len);
 			}
 
@@ -449,8 +496,15 @@ int glb_tick(glbctx_t* ctx) {
 				}
 			}
 #endif
-			channel->ack = headerptr->ack;
-			glbqueue_pop(channel->s_queue, NULL); // Remove acknowledged packet from send queue
+			glbpkg* lpkg = NULL;
+			if (glbqueue_peek(channel->s_queue, &lpkg) == GLB_SUCCESS) {
+				//printf("QUEUE - current: %u expected: %u\n", lpkg->header.seq, headerptr->ack);
+				//printf("RECVD s:%u a:%u\n", headerptr->seq, headerptr->ack);
+				if (lpkg->header.seq == headerptr->ack) {
+					glbqueue_pop(channel->s_queue, NULL); // Remove acknowledged packet from send queue
+				}
+			}
+
 
 			continue;
 		}
@@ -605,6 +659,9 @@ int glb_tick(glbctx_t* ctx) {
 				}
 				if (glbtime_isexpired(&pkg_ptr->timestamp)) {
 					// Resend packet
+
+					//printf("Sending pkg: s:%u a:%u (channel s:%u a:%u)\n", pkg_ptr->header.seq, pkg_ptr->header.ack, chan->seq, chan->ack);
+
 					glbio_send(ctx, pkg_ptr, (struct sockaddr*)&con->peer_addr, addr_len);
 
 					if ((chan->flags & GLB_CHANNEL_FLAG_RELIABLE) == 0) {
@@ -617,12 +674,18 @@ int glb_tick(glbctx_t* ctx) {
 					glbtime_start(&pkg_ptr->timestamp, GLB_RETRANSMISSION_TIMEOUT);
 					// Increment retransmission count
 					pkg_ptr->retransmit_count++;
+					
 					if (pkg_ptr->retransmit_count > GLB_MAX_RETRY) {
 
-						// Pop the packet from the queue to avoid infinite retransmission
-						// TODO: Consider notifying the application about the failed packet
-						glbqueue_pop(chan->s_queue, &pkg);
+						// Do not give-up
+						//glbqueue_pop(chan->s_queue, &pkg);
 						con->loss_count++;
+
+						// Try again
+						pkg_ptr->retransmit_count = 0;
+
+						// TODO: Notify the application about this packet
+						// TODO: Try RESYNC?
 #if 0
 						// Too many retransmissions, close connection
 						con->state = GLB_CONNECTION_CLOSED;
