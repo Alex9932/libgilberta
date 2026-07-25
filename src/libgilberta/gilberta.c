@@ -387,8 +387,28 @@ int glb_tick(glbctx_t* ctx) {
 				continue;
 			}
 
-			// TODO: check peer address
 			glbchannel_t* channel = &con->channels[headerptr->channel_id];
+
+			// Check peer address
+			if (glbctx_addrequal(&con->peer_addr, (glbaddr_t*)&from_addr) != GLB_SUCCESS) {
+				// New address (potential NAT rebind or address migration)
+
+				if ((channel->flags & GLB_CHANNEL_FLAG_RELIABLE) && headerptr->seq == channel->ack) {
+					ctx->logger(GLB_LOG_WARN, "[gilberta] Connection migrated to new address");
+					con->peer_addr = from_addr;
+
+					// Generate event
+					glbevent_t event = { 0 };
+					event.type = GLB_EVENT_MIGRATION;
+					event.migration.connection = con;
+					glbqueue_push(ctx->eventqueue, &event);
+				} else {
+					// No trust, skip this one
+					continue;
+				}
+			}
+
+
 			char buffer[128];
 
 			// Сheck sequence number, drop duplicates, etc.
@@ -684,7 +704,13 @@ int glb_tick(glbctx_t* ctx) {
 						// Try again
 						pkg_ptr->retransmit_count = 0;
 
-						// TODO: Notify the application about this packet
+						// Notify the application about this packet / generate event
+						glbevent_t event = { 0 };
+						event.type = GLB_EVENT_STALLED;
+						event.stalled.connection = con;
+						event.stalled.seq = pkg_ptr->header.seq;
+						glbqueue_push(ctx->eventqueue, &event);
+						
 						// TODO: Try RESYNC?
 #if 0
 						// Too many retransmissions, close connection

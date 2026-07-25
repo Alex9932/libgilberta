@@ -331,3 +331,15 @@ int glbctx_writeack(glbctx_t* ctx, glbconn_t* con, uint32_t ack) {
 
 	return GLB_SUCCESS;
 }
+
+int glbctx_addrequal(glbaddr_t* a, glbaddr_t* b) {
+	if (!a || !b) {
+		return GLB_ERROR_INVALID_ARGUMENT;
+	}
+
+	if (a->sin_addr.s_addr == b->sin_addr.s_addr && a->sin_port == b->sin_port) {
+		return GLB_SUCCESS;
+	}
+
+	return GLB_ERROR_UNKNOWN; // Return "generic" error (missmatch)
+}

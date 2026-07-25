@@ -219,4 +219,13 @@ int glbctx_generateseq(glbctx_t* ctx, glbconn_t* con, uint32_t ack);
  */
 int glbctx_writeack(glbctx_t* ctx, glbconn_t* con, uint32_t ack);
 
+/**
+ * @brief Compare two IPv4 addresses (IP + port) for equality.
+ *
+ * @param a First address (not NULL).
+ * @param b Second address (not NULL).
+ * @return GLB_SUCCESS if the address and port match
+ */
+int glbctx_addrequal(glbaddr_t* a, glbaddr_t* b);
+
 #endif

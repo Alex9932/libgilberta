@@ -297,6 +297,8 @@ typedef enum glb_event_type_t {
 	GLB_EVENT_DISCONNECT,     /**< Connection torn down */
 	GLB_EVENT_RECEIVE,        /**< Data received from peer */
 	GLB_EVENT_ERROR,          /**< An error occurred */
+	GLB_EVENT_MIGRATION,      /**< Connection was migrated to new address*/
+	GLB_EVENT_STALLED,        /**< No ACK for reliable channels*/
 	GLB_EVENT_MAX_ENUM = 0xBF
 } glb_event_type_t;
 
@@ -347,6 +349,24 @@ typedef struct glbevent_error_t {
 } glbevent_error_t;
 
 /**
+ * @struct glbevent_migration_t
+ * @brief Data for GLB_EVENT_MIGRATION event.
+ */
+typedef struct glbevent_migration_t {
+	glbconn_t* connection; /**< Connection where the migration occurred */
+} glbevent_migration_t;
+
+/**
+ * @struct glbevent_stalled_t
+ * @brief Data for GLB_EVENT_STALLED event.
+ */
+typedef struct glbevent_stalled_t {
+	glbconn_t* connection; /**< Connection where the error occurred */
+	uint32_t   seq;        /**< Packet sequence number */
+	// TODO: Add more fields?
+} glbevent_stalled_t;
+
+/**
  * @struct glbevent_t
  * @brief Generic event structure.
  *
@@ -362,6 +382,8 @@ typedef struct glbevent_t {
 		glbevent_disconnect_t disconnect; /**< Data for GLB_EVENT_DISCONNECT */
 		glbevent_receive_t    receive;    /**< Data for GLB_EVENT_RECEIVE */
 		glbevent_error_t      error;      /**< Data for GLB_EVENT_ERROR */
+		glbevent_migration_t  migration;  /**< Data for GLB_EVENT_MIGRATION */
+		glbevent_stalled_t    stalled;    /**< Data for GLB_EVENT_STALLED */
 		char                  _raw[56];   /**< Raw data (for fix structure length) */
 	};
 } glbevent_t;
