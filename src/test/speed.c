@@ -22,6 +22,7 @@ typedef struct {
 	uint64_t bytes_received;
 	uint32_t packets_sent;
 	uint32_t packets_received;
+	uint64_t rtt;
 } speed_stats_t;
 
 #ifdef _WIN32
@@ -78,11 +79,12 @@ static void PrintStats(speed_stats_t* stats, const char* side) {
 
 		double mbps = ((stats->bytes_received) * 8.0) / 1000000.0;
 
-		printf("[%s] Speed: %.2f Mbps | Total: %u KB | Packets: %u\n",
+		printf("[%s] Speed: %.2f Mbps | Total: %u KB | Packets: %u | Ping: %zu ms\n",
 			side,
 			mbps,
 			(unsigned int)(stats->bytes_received / 1024),
-			stats->packets_received);
+			stats->packets_received,
+			stats->rtt);
 
 		stats->bytes_received     = 0;
 		stats->packets_received   = 0;
@@ -124,6 +126,7 @@ static void LaunchClient() {
 	memset(payload, 0xAB, sizeof(payload));
 
 	speed_stats_t stats = {0};
+
 	int test_started = 0;
 
 	glbconn_t* connection = NULL;
@@ -154,6 +157,16 @@ static void LaunchClient() {
 						.channel_id = event.receive.channel
 					};
 					if (glb_popdata(ctx, &rinfo) == GLB_SUCCESS) {
+						uint64_t timestamp = 0;
+						memcpy(&timestamp, payload, sizeof(uint64_t));
+						if (stats.rtt != 0) {
+							stats.rtt += get_time_ms() - timestamp;
+							stats.rtt /= 2;
+						}
+						else {
+							stats.rtt = get_time_ms() - timestamp;
+						}
+
 						stats.bytes_received += rinfo.datalen;
 						stats.packets_received++;
 					}
@@ -164,6 +177,10 @@ static void LaunchClient() {
 		}
 
 		if (connection && test_started) {
+			// Add timestamp
+			uint64_t timestamp = get_time_ms();
+			memcpy(payload, &timestamp, sizeof(uint64_t));
+
 			glbsendinfo_t sinfo = {
 				.channel_id = 0,
 				.con        = connection,
