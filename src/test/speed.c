@@ -29,12 +29,12 @@ typedef struct {
 
 #ifdef _WIN32
 #include <windows.h>
-static uint64_t get_time_ms(void) {
-	static LARGE_INTEGER freq = { 0 };
-	if (freq.QuadPart == 0) QueryPerformanceFrequency(&freq);
-	LARGE_INTEGER count;
-	QueryPerformanceCounter(&count);
-	return (uint64_t)((count.QuadPart * 1000) / freq.QuadPart);
+static LARGE_INTEGER freq = { 0 };
+static uint64_t get_time_ms() {
+	if (freq.QuadPart == 0) { QueryPerformanceFrequency(&freq); }
+	LARGE_INTEGER now;
+	QueryPerformanceCounter(&now);
+	return (uint64_t)((now.QuadPart * 1000) / freq.QuadPart);
 }
 #else
 #include <sys/time.h>
@@ -269,7 +269,7 @@ static void LaunchServer() {
 							.channel_id = event.receive.channel,
 							.con = event.receive.connection,
 							.data = recv_buffer,
-							.len = sizeof(recv_buffer)
+							.len = rinfo.datalen
 						};
 						int res = glb_send(ctx, &sinfo);
 						if (res != GLB_SUCCESS && res != GLB_ERROR_QUEUE_FULL) {

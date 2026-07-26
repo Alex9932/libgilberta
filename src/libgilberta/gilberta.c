@@ -83,6 +83,7 @@ int glb_connect(glbctx_t* ctx) {
 
 	con->conn_id.generation = 0x00;
 	con->conn_id.id = 0xFFFF;
+	con->loss_count = 0;
 	con->rtt = 0;
 	struct sockaddr_in* server_addr = &con->peer_addr;
 
@@ -220,6 +221,7 @@ int glb_tick(glbctx_t* ctx) {
 			con->state = GLB_CONNECTION_SYN_RCVD;
 			con->retry = 0;
 			con->rtt   = 0;
+			con->loss_count = 0;
 			con->peer_addr = from_addr;
 			// Send SYN ACK
 			// Set state to SYN_RCVD and start a 0ms timer to force send SYN ACK in next glb_tick call

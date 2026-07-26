@@ -8,7 +8,7 @@ static uint64_t timer_get_current_ms() {
 	if (freq.QuadPart == 0) { QueryPerformanceFrequency(&freq); }
 	LARGE_INTEGER now;
 	QueryPerformanceCounter(&now);
-	return now.QuadPart / freq.QuadPart;
+	return (uint64_t)((now.QuadPart * 1000) / freq.QuadPart);
 }
 #else
 #include <time.h>
