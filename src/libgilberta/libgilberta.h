@@ -267,6 +267,7 @@ typedef struct glbconinfo_t {
 	uint16_t inet_port;      /**< Peer's port */
 	uint8_t  state;          /**< Connection state (GLBConnState) */
 	uint8_t  channel_count;  /**< Number of channels in the connection */
+	uint32_t rtt;            /**< Round trip time */
 	// TODO: Add more connection info (e.g. latency, remote address, etc.)
 } glbconinfo_t;
 

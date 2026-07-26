@@ -83,6 +83,7 @@ int glb_connect(glbctx_t* ctx) {
 
 	con->conn_id.generation = 0x00;
 	con->conn_id.id = 0xFFFF;
+	con->rtt = 0;
 	struct sockaddr_in* server_addr = &con->peer_addr;
 
 	server_addr->sin_family = AF_INET;
@@ -218,6 +219,7 @@ int glb_tick(glbctx_t* ctx) {
 			// Send or resend SYN ACK
 			con->state = GLB_CONNECTION_SYN_RCVD;
 			con->retry = 0;
+			con->rtt   = 0;
 			con->peer_addr = from_addr;
 			// Send SYN ACK
 			// Set state to SYN_RCVD and start a 0ms timer to force send SYN ACK in next glb_tick call
@@ -541,7 +543,11 @@ int glb_tick(glbctx_t* ctx) {
 			glbconid_t conn_id = { 0 };
 			conn_id.generation = headerptr->client_gen;
 			conn_id.id = headerptr->client_id;
+			uint32_t seq = pkg.header.seq;
+			uint32_t ack = pkg.header.ack;
 			glbpkg_init(&pkg, conn_id, GLB_CTRL_FLAG_PONG, headerptr->channel_id);
+			pkg.header.seq = seq;
+			pkg.header.ack = ack;
 			glbio_send(ctx, &pkg, (struct sockaddr*)&from_addr, addr_len);
 
 			continue;
@@ -557,6 +563,17 @@ int glb_tick(glbctx_t* ctx) {
 			con->keepalive_retry = 0; // Reset keepalive retry counter
 			
 			// TODO: Update RTT (round-trip time) based on timestamp
+
+			glbtimestamp_t now;
+			glbtimestamp_t time;
+			uint64_t seq = (uint64_t)(pkg.header.seq) << 32;
+			uint64_t ack = (uint64_t)pkg.header.ack;
+			time = seq | ack;
+
+			glbtime_start(&now, 0);
+			uint32_t rtt = (uint32_t)(now - time);
+
+			con->rtt = (con->rtt + rtt) / 2;
 
 			// Restart keepalive timer
 			glbtime_start(&con->keepalive, GLB_KEEPALIVE_TIME);
@@ -755,6 +772,12 @@ int glb_tick(glbctx_t* ctx) {
 				}
 #endif
 				glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_PING, 0);
+
+				glbtimestamp_t time;
+				glbtime_start(&time, 0);
+				// Use SEQ & ACK fields as timestamp
+				pkg.header.seq = (uint32_t)((time & 0xFFFFFFFF00000000) >> 32ull);
+				pkg.header.ack = (uint32_t)(time & 0x00000000FFFFFFFF);
 				glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len);
 				glbtime_start(&con->keepalive, GLB_KEEPALIVE_TIME * (con->keepalive_retry + 1));
 				con->keepalive_retry++;
@@ -812,6 +835,7 @@ int glb_getconinfo(glbconn_t* con, glbconinfo_t* info) {
 	info->channel_count = con->ctx->channel_count;
 	info->state = con->state;
 	info->inet_port = ntohs(con->peer_addr.sin_port);
+	info->rtt = con->rtt;
 	
 	// Convert IP address to string
 	inet_ntop(AF_INET, &con->peer_addr.sin_addr, info->inet_addr, sizeof(info->inet_addr));

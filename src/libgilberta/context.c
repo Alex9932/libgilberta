@@ -127,8 +127,8 @@ int glbctx_createconchannels(glbctx_t* ctx, glbconn_t* con) {
 		con->channels[i].flags    = ctx->channel_configs[i].flags;
 		con->channels[i].priority = ctx->channel_configs[i].priority;
 
-		con->channels[i].s_queue = glbqueue_init(ctx, sizeof(glbpkg), 1024); // TODO: Make queue size configurable
-		con->channels[i].r_queue = glbqueue_init(ctx, sizeof(glbpkg), 1024); // TODO: Make queue size configurable
+		con->channels[i].s_queue = glbqueue_init(ctx, sizeof(glbpkg), 32); // TODO: Make queue size configurable
+		con->channels[i].r_queue = glbqueue_init(ctx, sizeof(glbpkg), 32); // TODO: Make queue size configurable
 		if (!con->channels[i].s_queue || !con->channels[i].r_queue) {
 			// Free previously allocated queues and channels
 			for (size_t j = 0; j <= i; j++) {

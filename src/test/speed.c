@@ -6,6 +6,8 @@
 #include <string.h>
 #include <libgilberta.h>
 
+#include <signal.h>
+
 static uint8_t     isClient     = 0;
 static const char* address      = NULL;
 
@@ -71,7 +73,7 @@ static int ProcessArgs(int argc, char** argv) {
 	return 0;
 }
 
-static void PrintStats(speed_stats_t* stats, const char* side) {
+static void PrintStats(speed_stats_t* stats, const char* side, glbconn_t* con) {
 	uint64_t now = get_time_ms();
 	uint64_t elapsed = now - stats->last_print_time_ms;
 
@@ -79,16 +81,27 @@ static void PrintStats(speed_stats_t* stats, const char* side) {
 
 		double mbps = ((stats->bytes_received) * 8.0) / 1000000.0;
 
-		printf("[%s] Speed: %.2f Mbps | Total: %u KB | Packets: %u | Ping: %zu ms\n",
+		glbconinfo_t info = {0};
+		glb_getconinfo(con, &info);
+
+		printf("[%s] Speed: %.2f Mbps | Total: %u KB | Packets: %u | Ping: %zu ms (network RTT: %u ms)\n",
 			side,
 			mbps,
 			(unsigned int)(stats->bytes_received / 1024),
 			stats->packets_received,
-			stats->rtt);
+			stats->rtt,
+			info.rtt);
 
 		stats->bytes_received     = 0;
 		stats->packets_received   = 0;
 		stats->last_print_time_ms = now;
+	}
+}
+
+static void signal_handler(int signum) {
+	if (signum == SIGINT) {
+		printf("\n** Interrupted by Ctrl+C, shutting down...\n");
+		keep_running = 0;
 	}
 }
 
@@ -158,14 +171,9 @@ static void LaunchClient() {
 					};
 					if (glb_popdata(ctx, &rinfo) == GLB_SUCCESS) {
 						uint64_t timestamp = 0;
-						memcpy(&timestamp, payload, sizeof(uint64_t));
-						if (stats.rtt != 0) {
-							stats.rtt += get_time_ms() - timestamp;
-							stats.rtt /= 2;
-						}
-						else {
-							stats.rtt = get_time_ms() - timestamp;
-						}
+						memcpy(&timestamp, recv_buffer, sizeof(uint64_t));
+						stats.rtt += get_time_ms() - timestamp;
+						stats.rtt /= 2;
 
 						stats.bytes_received += rinfo.datalen;
 						stats.packets_received++;
@@ -197,10 +205,8 @@ static void LaunchClient() {
 				log_callback(GLB_LOG_ERROR, "Send failed!");
 				keep_running = 0;
 			}
-		}
 
-		if (test_started) {
-			PrintStats(&stats, "CLIENT");
+			PrintStats(&stats, "CLIENT", connection);
 		}
 	}
 
@@ -313,6 +319,16 @@ int ModuleMain(int argc, char** argv, Allocator * alloc) {
 	channels[0].priority = 0;
 	channels[1].flags    = 0;
 	channels[1].priority = 0;
+
+#ifdef _WIN32
+	signal(SIGINT, signal_handler);
+#else
+	struct sigaction sa;
+	sa.sa_handler = signal_handler;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = 0;
+	sigaction(SIGINT, &sa, NULL);
+#endif
 
 	if (isClient) {
 		LaunchClient();
