@@ -25,6 +25,11 @@ typedef struct {
 	uint32_t packets_sent;
 	uint32_t packets_received;
 	uint64_t rtt;
+	uint64_t rbytes_sent;      // For reliable channel
+	uint64_t rbytes_received;
+	uint32_t rpackets_sent;
+	uint32_t rpackets_received;
+	uint64_t rrtt;
 } speed_stats_t;
 
 #ifdef _WIN32
@@ -46,6 +51,11 @@ static uint64_t get_time_ms(void) {
 #endif
 
 static void log_callback(GLBLogLevel level, const char* message) {
+#if defined(NDEBUG)
+	if (level == GLB_LOG_DEBUG) {
+		return; // Skip DEBUG in release build
+	}
+#endif
 	const char* level_str = "";
 	switch (level) {
 	case GLB_LOG_INFO:  level_str = "**"; break;
@@ -73,17 +83,24 @@ static int ProcessArgs(int argc, char** argv) {
 	return 0;
 }
 
+static uint64_t totalsent = 0;
+static uint64_t totalrecvd = 0;
+
 static void PrintStats(speed_stats_t* stats, const char* side, glbconn_t* con) {
+
 	uint64_t now = get_time_ms();
 	uint64_t elapsed = now - stats->last_print_time_ms;
 
 	if (elapsed >= 1000) {
 
-		double mbps = ((stats->bytes_received) * 8.0) / 1000000.0;
+		double rmbps = ((stats->rbytes_received) * 8.0) / 1000000.0;
+		double mbps  = ((stats->bytes_received) * 8.0) / 1000000.0;
 
 		glbconinfo_t info = {0};
 		glb_getconinfo(con, &info);
 
+
+#if 0
 		printf("[%s] Speed: %.2f Mbps | Total: %u KB | Packets: %u | Ping: %zu ms (network RTT: %u ms)\n",
 			side,
 			mbps,
@@ -91,9 +108,41 @@ static void PrintStats(speed_stats_t* stats, const char* side, glbconn_t* con) {
 			stats->packets_received,
 			stats->rtt,
 			info.rtt);
+#endif
+		//printf("[%s] C0 speed: %.2f Mbps | Total: %u KB | Packets: %u/%u (loss: %u) | Ping: %zu ms (network RTT: %u ms)\n",
+		printf("[%s] C0 speed: %.2f Mbps | Total: %u KB | Packets: %u/%u | Ping: %zu ms (network RTT: %u ms)\n",
+			side,
+			rmbps,
+			(unsigned int)(stats->rbytes_received / 1024),
+			stats->rpackets_sent, stats->rpackets_received,
+			//stats->rpackets_sent - stats->rpackets_received,
+			stats->rrtt,
+			info.rtt);
+		printf("[%s] C1 speed: %.2f Mbps | Total: %u KB | Packets: %u/%u | Ping: %zu ms (network RTT: %u ms)\n",
+			side,
+			mbps,
+			(unsigned int)(stats->bytes_received / 1024),
+			stats->packets_sent, stats->packets_received,
+			//stats->packets_sent - stats->packets_received,
+			stats->rtt,
+			info.rtt);
+		printf("[%s] Total: %u/%u gap: %lld (grow if server queue is full)\n", side, totalsent, totalrecvd, (int64_t)totalsent - (int64_t)totalrecvd);
+		const char* status = NULL;
+		if (info.rtt > 150 || info.loss > 0 || info.desync > 0) {
+			status = "BAD";
+		} else {
+			status = "OK";
+		}
+		printf("[%s] [gilberta] RTT: %u ms, loss: %u desync events: %u [%s]\n", side, info.rtt, info.loss, info.desync, status);
 
 		stats->bytes_received     = 0;
+		stats->rbytes_received    = 0;
 		stats->packets_received   = 0;
+		stats->rpackets_received  = 0;
+		stats->bytes_sent         = 0;
+		stats->rbytes_sent        = 0;
+		stats->packets_sent       = 0;
+		stats->rpackets_sent      = 0;
 		stats->last_print_time_ms = now;
 	}
 }
@@ -172,11 +221,20 @@ static void LaunchClient() {
 					if (glb_popdata(ctx, &rinfo) == GLB_SUCCESS) {
 						uint64_t timestamp = 0;
 						memcpy(&timestamp, recv_buffer, sizeof(uint64_t));
-						stats.rtt += get_time_ms() - timestamp;
-						stats.rtt /= 2;
 
-						stats.bytes_received += rinfo.datalen;
-						stats.packets_received++;
+						totalrecvd++;
+						if (event.receive.channel == 0) { // Reliable
+							stats.rrtt += get_time_ms() - timestamp;
+							stats.rrtt /= 2;
+							stats.rpackets_received++;
+							stats.rbytes_received += rinfo.datalen;
+						}
+						else {
+							stats.rtt += get_time_ms() - timestamp;
+							stats.rtt /= 2;
+							stats.packets_received++;
+							stats.bytes_received += rinfo.datalen;
+						}
 					}
 					break;
 				}
@@ -185,27 +243,48 @@ static void LaunchClient() {
 		}
 
 		if (connection && test_started) {
-			// Add timestamp
-			uint64_t timestamp = get_time_ms();
-			memcpy(payload, &timestamp, sizeof(uint64_t));
-
 			glbsendinfo_t sinfo = {
 				.channel_id = 0,
 				.con        = connection,
 				.data       = payload,
 				.len        = sizeof(payload)
 			};
+
+			// Add timestamp
+			uint64_t timestamp = get_time_ms();
+			memcpy(payload, &timestamp, sizeof(uint64_t));
+
+			// Send reliable
 			int res = glb_send(ctx, &sinfo);
 			if (res == GLB_SUCCESS) {
-				stats.bytes_sent += sizeof(payload);
-				stats.packets_sent++;
+				stats.rbytes_sent += sizeof(payload);
+				stats.rpackets_sent++;
+				totalsent++;
 			} else if (res == GLB_ERROR_QUEUE_FULL) {
 				// Wait
 			} else {
 				log_callback(GLB_LOG_ERROR, "Send failed!");
 				keep_running = 0;
 			}
+#if 1
+			// Add timestamp
+			timestamp = get_time_ms();
+			memcpy(payload, &timestamp, sizeof(uint64_t));
 
+			// Send unreliable
+			sinfo.channel_id = 1;
+			res = glb_send(ctx, &sinfo);
+			if (res == GLB_SUCCESS) {
+				stats.bytes_sent += sizeof(payload);
+				stats.packets_sent++;
+				totalsent++;
+			} else if (res == GLB_ERROR_QUEUE_FULL) {
+				// Wait
+			} else {
+				log_callback(GLB_LOG_ERROR, "Send failed!");
+				keep_running = 0;
+			}
+#endif
 			PrintStats(&stats, "CLIENT", connection);
 		}
 	}
@@ -272,9 +351,18 @@ static void LaunchServer() {
 							.len = rinfo.datalen
 						};
 						int res = glb_send(ctx, &sinfo);
+
 						if (res != GLB_SUCCESS && res != GLB_ERROR_QUEUE_FULL) {
 							// Send failed
 							log_callback(GLB_LOG_ERROR, "Send failed!");
+						}
+
+						if (res == GLB_ERROR_QUEUE_FULL) {
+							static int first = 1;
+							if (first) {
+								first = 0;
+								log_callback(GLB_LOG_ERROR, "Queue full! Dropping");
+							}
 						}
 					}
 					break;

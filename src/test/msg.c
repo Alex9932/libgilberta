@@ -28,6 +28,11 @@ typedef struct msgdata_t {
 } msgdata_t;
 
 static void log_callback(GLBLogLevel level, const char* message) {
+#if defined(NDEBUG)
+	if (level == GLB_LOG_DEBUG) {
+		return; // Skip DEBUG in release build
+	}
+#endif
 	const char* level_str = "";
 	switch (level) {
 	case GLB_LOG_INFO:  level_str = "**"; break;
