@@ -129,6 +129,7 @@ typedef struct glbconn_t {
 	uint8_t    keepalive_retry; /**< Padding */
 	uint8_t    padding2;        /**< Padding */
 	uint32_t   loss_count;      /**< Count of lost packets (for statistics) */
+	uint32_t   desync_count;    /**< Count of DESYNC events (for statistics) */
 	uint32_t   rtt;             /**< Round-trip time in milliseconds */
 	uint32_t   seq;             /**< Sequence number for initialize connection */
 	uint32_t   ack;             /**< Acknowledgment number for initialize connection */

@@ -268,6 +268,8 @@ typedef struct glbconinfo_t {
 	uint8_t  state;          /**< Connection state (GLBConnState) */
 	uint8_t  channel_count;  /**< Number of channels in the connection */
 	uint32_t rtt;            /**< Round trip time */
+	uint32_t loss;           /**< Packet loss */
+	uint32_t desync;         /**< DESYNC errors */
 	// TODO: Add more connection info (e.g. latency, remote address, etc.)
 } glbconinfo_t;
 

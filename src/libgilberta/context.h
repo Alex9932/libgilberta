@@ -66,7 +66,8 @@ struct glbctx_t {
 	uint16_t      client_gen;       /**< Current client ID generation */
 	uint16_t      client_id;        /**< Current client ID */
 
-	uint16_t      recv_limit;       /**< Packet limit per one glb_tick() */
+	uint16_t      recv_limit;       /**< Receive packet limit per one glb_tick() */
+	uint16_t      send_limit;       /**< Transmit packet limit per one glb_tick() */
 
 	uint16_t      inet_port;        /**< Local port */
 	uint16_t      _padding1;        /**< Padding */
