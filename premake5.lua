@@ -15,11 +15,13 @@ workspace "gilberta"
 
 project "libgilberta"
 	kind "SharedLib"
-	language "C++"
+	language "C"
 	targetdir "bin/%{cfg.buildcfg}"
 	links {  }
 
-	files { "src/libgilberta/**.cpp", "src/libgilberta/**.c", "src/libgilberta/**.h" }
+	includedirs { "include" }
+	
+	files { "src/libgilberta/**.c", "src/libgilberta/**.h", "include/**.h" }
 
 	filter "configurations:Debug"
 		defines { "DEBUG" }
@@ -43,7 +45,7 @@ project "test"
 	dependson { "libgilberta" }
 	links { "libgilberta" }
 
-	includedirs { "src/libgilberta" }
+	includedirs { "include" }
 
 	files { "src/test/**.cpp", "src/test/**.c", "src/test/**.h" }
 
