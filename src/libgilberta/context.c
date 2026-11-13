@@ -61,55 +61,70 @@ static void GLB_DefaultLogger(GLBLogLevel level, const char* message) {
 	printf("%s [glb logger] %s\n", level_str, message);
 }
 
-static int GLB_CreateSocket(glbctx_t* ctx, const glbcfg_t* config) {
-	ctx->sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-	if (ctx->sock == SOCKET_NULL_HANDLE) {
-		ctx->logger(GLB_LOG_ERROR, "[gilberta] Failed to create socket.");
-		ctx->error = GLB_ERROR_SOCKET_CREATION;
-		return GLB_ERROR_SOCKET_CREATION;
-	}
-
-	// Set non blocking
+static int GLB_SetNonBlock(glbctx_t* ctx, GSocketHandle socket) {
 #if defined(GILBERTA_WINDOWS)
 	ULONG mode = 1;
-	if (ioctlsocket(ctx->sock, FIONBIO, &mode)) {
+	if (ioctlsocket(socket, FIONBIO, &mode)) {
 		ctx->logger(GLB_LOG_ERROR, "[gilberta] Failed to set non-blocking mode.");
 		ctx->error = GLB_ERROR_SOCKET_CREATION;
 		return GLB_ERROR_SOCKET_CREATION;
 	}
 #else
-	int flags = fcntl(ctx->sock, F_GETFL, 0);
-	if (flags < 0 || fcntl(ctx->sock, F_SETFL, flags | O_NONBLOCK) < 0) {
+	int flags = fcntl(socket, F_GETFL, 0);
+	if (flags < 0 || fcntl(socket, F_SETFL, flags | O_NONBLOCK) < 0) {
 		ctx->logger(GLB_LOG_ERROR, "[gilberta] Failed to set non-blocking mode.");
 		ctx->error = GLB_ERROR_SOCKET_CREATION;
 		return GLB_ERROR_SOCKET_CREATION;
 	}
 #endif
-
 	return GLB_SUCCESS;
 }
 
-static int GLB_CloseSocket(glbctx_t* ctx) {
-	if (ctx->sock != SOCKET_NULL_HANDLE) {
+static int GLB_CloseSocket(GSocketHandle* sock);
+
+// family - AF_INET, AF_INET6
+static int GLB_CreateSocket(glbctx_t* ctx, const glbcfg_t* config, GSocketHandle* out, int family) {
+	GSocketHandle sock = socket(family, SOCK_DGRAM, IPPROTO_UDP);
+	if (sock == SOCKET_NULL_HANDLE) {
+		if (family == AF_INET) {
+			ctx->logger(GLB_LOG_ERROR, "[gilberta] Failed to create IPv4 socket.");
+		} else if (family == AF_INET6) {
+			ctx->logger(GLB_LOG_ERROR, "[gilberta] Failed to create IPv6 socket.");
+		}
+		ctx->error = GLB_ERROR_SOCKET_CREATION;
+		return GLB_ERROR_SOCKET_CREATION;
+	}
+
+	if (GLB_SetNonBlock(ctx, sock) != GLB_SUCCESS) {
+		GLB_CloseSocket(&sock);
+		return GLB_ERROR_SOCKET_CREATION;
+	}
+	*out = sock;
+	return GLB_SUCCESS;
+}
+
+static int GLB_CloseSocket(GSocketHandle* sock) {
+	if (*sock != SOCKET_NULL_HANDLE) {
 #if defined(GILBERTA_WINDOWS)
-		closesocket(ctx->sock);
+		closesocket(*sock);
 #else
-		close(ctx->sock);
+		close(*sock);
 #endif
-		ctx->sock = SOCKET_NULL_HANDLE;
+		*sock = SOCKET_NULL_HANDLE;
 	}
 	return GLB_SUCCESS;
 }
 
-static int GLB_BindSocket(glbctx_t* ctx, const glbcfg_t* config) {
+// TODO: Add IPv6 addresses
+static int GLB_BindSocket(glbctx_t* ctx, const glbcfg_t* config, GSocketHandle sock, int family) {
 	char logbuf[256];
 	struct sockaddr_in server_addr = { 0 };
-	server_addr.sin_family = AF_INET;
+	server_addr.sin_family = family;
 	server_addr.sin_port = htons(ctx->inet_port);
-	inet_pton(AF_INET, ctx->inet_addr, &server_addr.sin_addr);
+	inet_pton(family, ctx->inet_addr, &server_addr.sin_addr);
 	snprintf(logbuf, sizeof(logbuf), "[gilberta] Binding socket to %s:%d...", ctx->inet_addr, ctx->inet_port);
 	ctx->logger(GLB_LOG_INFO, logbuf);
-	if (bind(ctx->sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+	if (bind(sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
 		ctx->logger(GLB_LOG_ERROR, "[gilberta] Failed to bind socket.");
 		ctx->error = GLB_ERROR_SOCKET_BINDING;
 		return GLB_ERROR_SOCKET_BINDING;
@@ -175,35 +190,35 @@ glbctx_t* glbctx_create(const glbcfg_t* config) {
 	GLB_INIT_WINSOCK(logger);
 
 	uint32_t conns = 1; // Client has a single connection
-	if (config->flags & GLB_FLAG_BIND_PORT) {
-		// Server mode
-		conns = config->max_connections;
-	}
-	else {
-		// Client mode
-		if (config->flags & GLB_FLAG_NETWORK_V4 && config->flags & GLB_FLAG_NETWORK_V6) {
-			// Error
-			return NULL;
-		}
-	}
+
+	int is_server = (config->flags & GLB_FLAG_BIND_PORT) != 0;
+	int use_v4 = (config->flags & GLB_FLAG_NETWORK_V4) != 0;
+	int use_v6 = (config->flags & GLB_FLAG_NETWORK_V6) != 0;
+
+	if (!use_v4 && !use_v6) { use_v4 = 1; } // Use IPv4 by default if no flags set
+	if (!is_server && use_v4 && use_v6) { return NULL; } // No both v4 and v6 in client mode
+	if (is_server) { conns = config->max_connections; }
 
 	glbctx_t* ctx = (glbctx_t*)galloc.malloc(sizeof(glbctx_t) + sizeof(glbconn_t) * (size_t)conns + sizeof(glbchan_t) * config->channel_count);
 	if (!ctx) {
 		return NULL;
 	}
 
+	// Invlidate socket handles
+	ctx->sock = SOCKET_NULL_HANDLE;
+	ctx->sock6 = SOCKET_NULL_HANDLE;
+
 	ctx->allocator.malloc = galloc.malloc;
-	ctx->allocator.free   = galloc.free;
-	ctx->logger           = logger;
-	ctx->flags            = config->flags;
+	ctx->allocator.free = galloc.free;
+	ctx->logger = logger;
+	ctx->flags = config->flags;
 	ctx->connection_count = conns;
-	ctx->channel_count    = config->channel_count;
-	ctx->inet_port        = config->port;
+	ctx->channel_count = config->channel_count;
+	ctx->inet_port = config->port;
 
 	ctx->client_gen = 0;
-	ctx->client_id  = 1;
+	ctx->client_id = 1;
 	ctx->recv_limit = 0;
-
 
 	// glbconn_t array is placed right after glbctx_t structure
 	ctx->connections = (glbconn_t*)((char*)ctx + sizeof(glbctx_t));
@@ -220,27 +235,46 @@ glbctx_t* glbctx_create(const glbcfg_t* config) {
 
 	memset(ctx->connections, 0, sizeof(glbconn_t) * (size_t)conns);
 	for (size_t i = 0; i < ctx->connection_count; i++) {
-		ctx->connections[i].ctx   = ctx;
+		ctx->connections[i].ctx = ctx;
 		ctx->connections[i].state = GLB_CONNECTION_CLOSED;
 	}
 
-	if (GLB_CreateSocket(ctx, config) != GLB_SUCCESS) {
-		ctx->allocator.free(ctx);
-		return NULL;
-	}
-
-	if (config->flags & GLB_FLAG_BIND_PORT) {
-		if (GLB_BindSocket(ctx, config) != GLB_SUCCESS) {
-			GLB_CloseSocket(ctx);
+	if (use_v4) {
+		if (GLB_CreateSocket(ctx, config, &ctx->sock, AF_INET) != GLB_SUCCESS) {
 			ctx->allocator.free(ctx);
 			return NULL;
 		}
 	}
 
+	if (use_v6) {
+		if (GLB_CreateSocket(ctx, config, &ctx->sock, AF_INET6) != GLB_SUCCESS) {
+			ctx->allocator.free(ctx);
+			return NULL;
+		}
+	}
+
+	if (is_server && ctx->sock != SOCKET_NULL_HANDLE) {
+		if (GLB_BindSocket(ctx, config, ctx->sock, AF_INET) != GLB_SUCCESS) {
+			GLB_CloseSocket(&ctx->sock);
+			ctx->allocator.free(ctx);
+			return NULL;
+		}
+	}
+
+	if (is_server && ctx->sock6 != SOCKET_NULL_HANDLE) {
+		if (GLB_BindSocket(ctx, config, ctx->sock6, AF_INET6) != GLB_SUCCESS) {
+			GLB_CloseSocket(&ctx->sock6);
+			ctx->allocator.free(ctx);
+			return NULL;
+		}
+	}
+
+
 	// Initialize system queue, use 1024 by default
 	ctx->eventqueue = glbqueue_init(ctx, sizeof(glbevent_t), config->eventqueue_length == 0 ? 1024 : config->eventqueue_length);
 	if(!ctx->eventqueue) {
-		GLB_CloseSocket(ctx);
+		if (ctx->sock !=- SOCKET_NULL_HANDLE)  GLB_CloseSocket(&ctx->sock);
+		if (ctx->sock6 != -SOCKET_NULL_HANDLE) GLB_CloseSocket(&ctx->sock6);
 		ctx->allocator.free(ctx);
 		return NULL;
 	}
@@ -258,7 +292,8 @@ int glbctx_destroy(glbctx_t* ctx) {
 		glbctx_freeconchannels(ctx, con);
 	}
 
-	GLB_CloseSocket(ctx);
+	if (ctx->sock != -SOCKET_NULL_HANDLE)  GLB_CloseSocket(&ctx->sock);
+	if (ctx->sock6 != -SOCKET_NULL_HANDLE) GLB_CloseSocket(&ctx->sock6);
 
 	ctx->logger(GLB_LOG_INFO, "[gilberta] Context destroyed.");
 	GLB_DESTROY_WINSOCK(ctx->logger);

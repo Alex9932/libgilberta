@@ -19,6 +19,7 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #pragma comment(lib, "ws2_32.lib")
+typedef int glbaddrlen_t; /**< Socket length */
 typedef SOCKET GSocketHandle; /**< Socket handle type */
 static const GSocketHandle SOCKET_NULL_HANDLE = INVALID_SOCKET; /**< Invalid handle */
 #elif defined(GILBERTA_POSIX)
@@ -27,6 +28,7 @@ static const GSocketHandle SOCKET_NULL_HANDLE = INVALID_SOCKET; /**< Invalid han
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <unistd.h>
+typedef socklen_t glbaddrlen_t; /**< Socket length */
 typedef int GSocketHandle; /**< Socket handle type */
 static const GSocketHandle SOCKET_NULL_HANDLE = -1; /**< Invalid handle */
 #else
@@ -50,8 +52,8 @@ static const GSocketHandle SOCKET_NULL_HANDLE = -1; /**< Invalid handle */
 /*  Address and ID types             */
 /* ================================= */
 
-/** @brief IPv4 address type (synonym for sockaddr_in). */
-typedef struct sockaddr_in glbaddr_t;
+/** @brief Universal IPv4/IPv6 address type (synonym for sockaddr_storage). */
+typedef struct sockaddr_storage glbaddr_t;
 
 /**
  * @struct glbconid_t
@@ -121,21 +123,22 @@ typedef struct glbchannel_t {
  * @see glbctx_t @see glbchannel_t
  */
 typedef struct glbconn_t {
-	glbctx_t*  ctx;             /**< Parent context */
-	glbaddr_t  peer_addr;       /**< Peer address (IP + port) */
-	glbconid_t conn_id;         /**< Peer's logical ID */
-	uint8_t    state;           /**< Current state (GLBConnState) */
-	uint8_t    retry;           /**< Handshake retry counter */
-	uint8_t    keepalive_retry; /**< Padding */
-	uint8_t    padding2;        /**< Padding */
-	uint32_t   loss_count;      /**< Count of lost packets (for statistics) */
-	uint32_t   desync_count;    /**< Count of DESYNC events (for statistics) */
-	uint32_t   rtt;             /**< Round-trip time in milliseconds */
-	uint32_t   seq;             /**< Sequence number for initialize connection */
-	uint32_t   ack;             /**< Acknowledgment number for initialize connection */
-	glbchannel_t*  channels;    /**< Array of channels (NULL if CLOSED) */
-	glbtimestamp_t time;        /**< Time of last activity (for timeouts) */
-	glbtimestamp_t keepalive;   /**< Ping timestamp */
+	glbctx_t*    ctx;             /**< Parent context */
+	glbaddr_t    peer_addr;       /**< Peer address (IP + port) */
+	glbaddrlen_t peer_addr_len;   /**< Peer address length */
+	glbconid_t   conn_id;         /**< Peer's logical ID */
+	uint8_t      state;           /**< Current state (GLBConnState) */
+	uint8_t      retry;           /**< Handshake retry counter */
+	uint8_t      keepalive_retry; /**< Padding */
+	uint8_t      padding2;        /**< Padding */
+	uint32_t     loss_count;      /**< Count of lost packets (for statistics) */
+	uint32_t     desync_count;    /**< Count of DESYNC events (for statistics) */
+	uint32_t     rtt;             /**< Round-trip time in milliseconds */
+	uint32_t     seq;             /**< Sequence number for initialize connection */
+	uint32_t     ack;             /**< Acknowledgment number for initialize connection */
+	glbchannel_t*  channels;      /**< Array of channels (NULL if CLOSED) */
+	glbtimestamp_t time;          /**< Time of last activity (for timeouts) */
+	glbtimestamp_t keepalive;     /**< Ping timestamp */
 } glbconn_t;
 
 /* ================================= */
