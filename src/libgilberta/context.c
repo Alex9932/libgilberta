@@ -179,6 +179,13 @@ glbctx_t* glbctx_create(const glbcfg_t* config) {
 		// Server mode
 		conns = config->max_connections;
 	}
+	else {
+		// Client mode
+		if (config->flags & GLB_FLAG_NETWORK_V4 && config->flags & GLB_FLAG_NETWORK_V6) {
+			// Error
+			return NULL;
+		}
+	}
 
 	glbctx_t* ctx = (glbctx_t*)galloc.malloc(sizeof(glbctx_t) + sizeof(glbconn_t) * (size_t)conns + sizeof(glbchan_t) * config->channel_count);
 	if (!ctx) {

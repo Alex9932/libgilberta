@@ -146,6 +146,15 @@ typedef enum GLBErrorCode {
 /** @brief Server mode flag: bind to the specified port and accept incoming connections. */
 #define GLB_FLAG_BIND_PORT 0x01
 
+/** @brief Use IPv4 for UDP transport */
+#define GLB_FLAG_NETWORK_V4 0x10
+
+/** @brief Use IPv6 for UDP transport */
+#define GLB_FLAG_NETWORK_V6 0x20
+
+/** @brief Use both IPv4 and IPv6 for UDP transport (server mode, listening socket only) */
+#define GLB_FLAG_NETWORK_MIXED (GLB_FLAG_NETWORK_V4 | GLB_FLAG_NETWORK_V6)
+
 /** @brief Channel flag: require reliable delivery (retransmission, ordering). */
 #define GLB_CHANNEL_FLAG_RELIABLE 0x01
 

@@ -52,7 +52,8 @@ void GWinSockDestroy(GLBLogFunc logger);
  * @see glbctx_create() @see glbctx_destroy()
  */
 struct glbctx_t {
-	GSocketHandle sock;             /**< UDP socket handle */
+	GSocketHandle sock;             /**< UDP IPv4 socket handle */
+	GSocketHandle sock6;            /**< UDP IPv6 socket handle */
 	glballoc_t    allocator;        /**< Custom allocator */
 	GLBLogFunc    logger;           /**< Logging function (can be NULL) */
 
