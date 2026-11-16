@@ -86,6 +86,7 @@ int glb_connect(glbctx_t* ctx) {
 	con->conn_id.id = 0xFFFF;
 	con->loss_count = 0;
 	con->rtt = 0;
+#if 0
 	struct sockaddr_in* server_addr = &con->peer_addr;
 
 	server_addr->sin_family = AF_INET;
@@ -94,6 +95,33 @@ int glb_connect(glbctx_t* ctx) {
 		ctx->logger(GLB_LOG_ERROR, "[gilberta] Invalid IP address is set.");
 		return GLB_ERROR_INVALID_ARGUMENT;
 	}
+#endif
+
+	memset(&con->peer_addr, 0, sizeof(con->peer_addr));
+	if (ctx->flags & GLB_FLAG_NETWORK_V6) {
+		struct sockaddr_in6* server_addr = (struct sockaddr_in6*)&con->peer_addr;
+		server_addr->sin6_family = AF_INET6;
+		server_addr->sin6_port   = htons(ctx->inet_port);
+
+		if (inet_pton(AF_INET6, ctx->inet_addr, &server_addr->sin6_addr) != 1) {
+			ctx->logger(GLB_LOG_ERROR, "[gilberta] Invalid IPv6 address is set.");
+			return GLB_ERROR_INVALID_ARGUMENT;
+		}
+
+		con->peer_addr_len = sizeof(*server_addr);
+	} else {
+		struct sockaddr_in* server_addr = (struct sockaddr_in*)&con->peer_addr;
+		server_addr->sin_family = AF_INET;
+		server_addr->sin_port   = htons(ctx->inet_port);
+
+		if (inet_pton(AF_INET, ctx->inet_addr, &server_addr->sin_addr) != 1) {
+			ctx->logger(GLB_LOG_ERROR, "[gilberta] Invalid IPv4 address is set.");
+			return GLB_ERROR_INVALID_ARGUMENT;
+		}
+
+		con->peer_addr_len = sizeof(*server_addr);
+	}
+
 
 	// Set state to SYN_SENT and start a 0ms timer to force send SYN in next glb_tick call
 	con->state = GLB_CONNECTION_SYN_SENT;
@@ -159,8 +187,10 @@ int glb_send(glbctx_t* ctx, glbsendinfo_t* info) {
 
 int glb_tick(glbctx_t* ctx) {
 	glbpkg pkg = { 0 };
-	struct sockaddr_in from_addr = { 0 };
-	socklen_t addr_len = sizeof(from_addr);
+	//struct sockaddr_in from_addr = { 0 };
+	//socklen_t addr_len = sizeof(from_addr);
+	glbaddr_t from_addr;
+	glbaddrlen_t addr_len;
 	glbpkgheader* headerptr = (glbpkgheader*)&pkg;
 	void* dataptr = (void*)((char*)&pkg + sizeof(glbpkgheader));
 
@@ -171,18 +201,38 @@ int glb_tick(glbctx_t* ctx) {
 	int glb_fin_ack  = GLB_CTRL_FLAG_FIN  | GLB_CTRL_FLAG_ACK;
 	int glb_data_ack = GLB_CTRL_FLAG_DATA | GLB_CTRL_FLAG_ACK;
 
-	while (1) {
+	GSocketHandle read_sockets[2] = { ctx->sock, ctx->sock6 };
 
-		if (ctx->recv_limit >= GLB_RECV_LIMIT_PER_TICK) {
-			// Limit reached, break the loop
-			break;
+	int socket_index = 0;
+	int empty_reads = 0;
+
+	while (ctx->recv_limit < GLB_RECV_LIMIT_PER_TICK && empty_reads < 2) {
+
+		//int recv_len = 0;
+		//int res = glbio_read(ctx, &pkg, &recv_len, (struct sockaddr*)&from_addr, &addr_len);
+
+		//if (res == GLB_SUCCESS && recv_len == 0) { break; } // No data readed
+		//if (res != GLB_SUCCESS) { continue; } // Invalid packet
+
+		GSocketHandle read_socket = read_sockets[socket_index];
+		socket_index ^= 1;
+		if (read_socket == SOCKET_NULL_HANDLE) {
+			empty_reads++;
+			continue;
 		}
 
+		memset(&from_addr, 0, sizeof(from_addr));
+		addr_len = sizeof(from_addr);
 		int recv_len = 0;
-		int res = glbio_read(ctx, &pkg, &recv_len, (struct sockaddr*)&from_addr, &addr_len);
+		int res = glbio_read(ctx, read_socket, &pkg, &recv_len, (struct sockaddr*)&from_addr, &addr_len);
 
-		if (res == GLB_SUCCESS && recv_len == 0) { break; } // No data readed
+		if (res == GLB_SUCCESS && recv_len == 0) {
+			empty_reads++;
+			continue;
+		}
+
 		if (res != GLB_SUCCESS) { continue; } // Invalid packet
+		empty_reads = 0;
 
 		ctx->recv_limit++; // Count processed packet
 
@@ -225,6 +275,7 @@ int glb_tick(glbctx_t* ctx) {
 			con->rtt   = 0;
 			con->loss_count = 0;
 			con->peer_addr = from_addr;
+			con->peer_addr_len = addr_len;
 			// Send SYN ACK
 			// Set state to SYN_RCVD and start a 0ms timer to force send SYN ACK in next glb_tick call
 			glbtime_start(&con->time, 0);
@@ -319,7 +370,7 @@ int glb_tick(glbctx_t* ctx) {
 			glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_ACK, 0);
 			pkg.header.ack = con->channels[0].ack;
 			pkg.header.seq = con->channels[0].seq;
-			if (glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len) == GLB_SUCCESS) {
+			if (glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, con->peer_addr_len) == GLB_SUCCESS) {
 				con->state = GLB_CONNECTION_ESTABLISHED;
 			}
 
@@ -335,7 +386,7 @@ int glb_tick(glbctx_t* ctx) {
 
 			// Send FIN ACK and close connection (if not closed)
 			glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_FIN | GLB_CTRL_FLAG_ACK, 0);
-			if (glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len) == GLB_SUCCESS) {
+			if (glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, con->peer_addr_len) == GLB_SUCCESS) {
 
 				if (con->state != GLB_CONNECTION_CLOSED) {
 					con->state = GLB_CONNECTION_CLOSED;
@@ -402,6 +453,7 @@ int glb_tick(glbctx_t* ctx) {
 				if ((channel->flags & GLB_CHANNEL_FLAG_RELIABLE) && headerptr->seq == channel->ack) {
 					ctx->logger(GLB_LOG_WARN, "[gilberta] Connection migrated to new address");
 					con->peer_addr = from_addr;
+					con->peer_addr_len = addr_len;
 
 					// Generate event
 					glbevent_t event = { 0 };
@@ -431,7 +483,7 @@ int glb_tick(glbctx_t* ctx) {
 				pkg.header.ack = ack;
 				pkg.header.seq = channel->seq;
 				//printf("RESEND s:%u a:%u\n", pkg.header.seq, pkg.header.ack);
-				glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len);
+				glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, con->peer_addr_len);
 
 				continue;
 			}
@@ -454,7 +506,7 @@ int glb_tick(glbctx_t* ctx) {
 					glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_ACK | GLB_CTRL_FLAG_DATA, headerptr->channel_id);
 					pkg.header.ack = headerptr->seq;
 					pkg.header.seq = con->channels[headerptr->channel_id].seq;
-					glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len);
+					glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, con->peer_addr_len);
 				}
 				continue;
 			}
@@ -479,7 +531,7 @@ int glb_tick(glbctx_t* ctx) {
 				pkg.header.ack = ack;
 				pkg.header.seq = channel->seq;
 				//printf("SEND s:%u a:%u\n", pkg.header.seq, pkg.header.ack);
-				glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len);
+				glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, con->peer_addr_len);
 			}
 
 			glbevent_t event = { 0 };
@@ -646,7 +698,7 @@ int glb_tick(glbctx_t* ctx) {
 				glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_SYN, 0);
 				pkg.header.seq = con->seq;
 				pkg.header.ack = con->ack;
-				glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len);
+				glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, con->peer_addr_len);
 				// And start new timer
 				glbtime_start(&con->time, GLB_RETRY_TIMEOUT * (con->retry + 1));
 				con->retry++;
@@ -664,7 +716,7 @@ int glb_tick(glbctx_t* ctx) {
 				glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_SYN | GLB_CTRL_FLAG_ACK, 0);
 				pkg.header.seq = con->seq;
 				pkg.header.ack = con->ack;
-				glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len);
+				glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, con->peer_addr_len);
 				// And start new timer
 				glbtime_start(&con->time, GLB_RETRY_TIMEOUT * (con->retry + 1));
 				con->retry++;
@@ -688,7 +740,7 @@ int glb_tick(glbctx_t* ctx) {
 				}
 
 				glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_FIN, 0);
-				glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len);
+				glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, con->peer_addr_len);
 				glbtime_start(&con->time, GLB_RETRY_TIMEOUT * (con->retry + 1));
 
 				con->retry++;
@@ -712,7 +764,7 @@ int glb_tick(glbctx_t* ctx) {
 
 						//printf("Sending pkg: s:%u a:%u (channel s:%u a:%u)\n", pkg_ptr->header.seq, pkg_ptr->header.ack, chan->seq, chan->ack);
 
-						glbio_send(ctx, pkg_ptr, (struct sockaddr*)&con->peer_addr, addr_len);
+						glbio_send(ctx, pkg_ptr, (struct sockaddr*)&con->peer_addr, con->peer_addr_len);
 
 						if ((chan->flags & GLB_CHANNEL_FLAG_RELIABLE) == 0) {
 							// Not reliable channel, pop the packet from the queue to avoid infinite retransmission
@@ -791,7 +843,7 @@ int glb_tick(glbctx_t* ctx) {
 					// Use SEQ & ACK fields as timestamp
 					pkg.header.seq = (uint32_t)((time & 0xFFFFFFFF00000000) >> 32ull);
 					pkg.header.ack = (uint32_t)(time & 0x00000000FFFFFFFF);
-					glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, addr_len);
+					glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, con->peer_addr_len);
 					glbtime_start(&con->keepalive, GLB_KEEPALIVE_TIME * (con->keepalive_retry + 1));
 					con->keepalive_retry++;
 				}
@@ -850,12 +902,28 @@ int glb_getconinfo(glbconn_t* con, glbconinfo_t* info) {
 
 	info->channel_count = con->ctx->channel_count;
 	info->state = con->state;
-	info->inet_port = ntohs(con->peer_addr.sin_port);
 	info->rtt = con->rtt;
 	info->loss = con->loss_count;
 	info->desync = con->desync_count;
-	// Convert IP address to string
-	inet_ntop(AF_INET, &con->peer_addr.sin_addr, info->inet_addr, sizeof(info->inet_addr));
+
+	// Convert IP address to string and set port
+	if (con->peer_addr.ss_family == AF_INET) {
+		const struct sockaddr_in* addr4 = (const struct sockaddr_in*)&con->peer_addr;
+		info->inet_port = ntohs(addr4->sin_port);
+		if (!inet_ntop(AF_INET, &addr4->sin_addr, info->inet_addr, sizeof(info->inet_addr))) {
+			return GLB_ERROR_UNKNOWN;
+		}
+	}
+	else if (con->peer_addr.ss_family == AF_INET6) {
+		const struct sockaddr_in6* addr6 = (const struct sockaddr_in6*)&con->peer_addr;
+		info->inet_port = ntohs(addr6->sin6_port);
+		if (!inet_ntop(AF_INET6, &addr6->sin6_addr, info->inet_addr, sizeof(info->inet_addr))) {
+			return GLB_ERROR_UNKNOWN;
+		}
+	}
+	else {
+		return GLB_ERROR_UNKNOWN;
+	}
 
 	return GLB_SUCCESS;
 }

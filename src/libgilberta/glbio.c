@@ -61,9 +61,26 @@ uint16_t crc16_modbus_fast(const uint8_t* data, size_t len) {
 	return crc;
 }
 
-int glbio_send(glbctx_t* ctx, glbpkg* pkg, struct sockaddr* to_addr, int addr_len) {
+int glbio_send(glbctx_t* ctx, glbpkg* pkg, struct sockaddr* to_addr, glbaddrlen_t addr_len) {
+	if (!ctx || !pkg || !to_addr) {
+		return GLB_ERROR_INVALID_ARGUMENT;
+	}
+
+	GSocketHandle sock = SOCKET_NULL_HANDLE;
+	switch (to_addr->sa_family) {
+		case AF_INET:  { sock = ctx->sock;  break; }
+		case AF_INET6: { sock = ctx->sock6; break; }
+		default: { return GLB_ERROR_INVALID_ARGUMENT; }
+	}
+
+	if (sock == SOCKET_NULL_HANDLE) {
+		ctx->error = GLB_ERROR_SEND_FAILED;
+		return GLB_ERROR_SEND_FAILED;
+	}
+
 	pkg->header.checksum = crc16_modbus_fast(pkg->data, pkg->header.payload_len);
-	int send_len = sendto(ctx->sock, (const char*)pkg, sizeof(glbpkgheader) + pkg->header.payload_len, 0, to_addr, addr_len);
+	//int send_len = sendto(ctx->sock, (const char*)pkg, sizeof(glbpkgheader) + pkg->header.payload_len, 0, to_addr, addr_len);
+	int send_len = sendto(sock, (const char*)pkg, sizeof(glbpkgheader) + pkg->header.payload_len, 0, to_addr, addr_len);
 
 	if (send_len != pkg->header.payload_len + sizeof(glbpkgheader)) {
 		ctx->error = GLB_ERROR_SEND_FAILED;
@@ -73,8 +90,9 @@ int glbio_send(glbctx_t* ctx, glbpkg* pkg, struct sockaddr* to_addr, int addr_le
 	return GLB_SUCCESS;
 }
 
-int glbio_read(glbctx_t* ctx, glbpkg* pkg, int* recvd, struct sockaddr* from_addr, int* addr_len) {
-	int recv_len = recvfrom(ctx->sock, (char*)pkg, sizeof(glbpkg), 0, from_addr, addr_len);
+int glbio_read(glbctx_t* ctx, GSocketHandle sock, glbpkg* pkg, int* recvd, struct sockaddr* from_addr, glbaddrlen_t* addr_len) {
+	//int recv_len = recvfrom(ctx->sock, (char*)pkg, sizeof(glbpkg), 0, from_addr, addr_len);
+	int recv_len = recvfrom(sock, (char*)pkg, sizeof(glbpkg), 0, from_addr, addr_len);
 
 	if (recv_len < 0) {
 #if defined(GILBERTA_WINDOWS)

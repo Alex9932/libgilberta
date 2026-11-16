@@ -224,7 +224,7 @@ typedef struct glbpkg {
  * @param ctx      Context with socket (not NULL).
  * @param pkg      Packet to send (not NULL). The header.checksum field will be overwritten.
  * @param to_addr  Recipient address (not NULL).
- * @param addr_len Address structure size (sizeof(struct sockaddr_in)).
+ * @param addr_len Address structure size (sizeof(struct sockaddr_in or sockaddr_in6)).
  * @return GLB_SUCCESS on success, error code otherwise.
  * @retval GLB_ERROR_INVALID_ARGUMENT if ctx == NULL or pkg == NULL.
  * @retval GLB_ERROR_SEND_FAILED if sendto() returned an error.
@@ -232,7 +232,7 @@ typedef struct glbpkg {
  * @note Function is non-blocking (socket in non-blocking mode).
  * @see glbio_read()
  */
-int glbio_send(glbctx_t* ctx, glbpkg* pkg, struct sockaddr* to_addr, int addr_len);
+int glbio_send(glbctx_t* ctx, glbpkg* pkg, struct sockaddr* to_addr, glbaddrlen_t addr_len);
 
 /**
  * @brief Receive a UDP packet.
@@ -253,6 +253,6 @@ int glbio_send(glbctx_t* ctx, glbpkg* pkg, struct sockaddr* to_addr, int addr_le
  * @note Function is non-blocking (socket in non-blocking mode).
  * @see glbio_send()
  */
-int glbio_read(glbctx_t* ctx, glbpkg* pkg, int* recvd, struct sockaddr* from_addr, int* addr_len);
+int glbio_read(glbctx_t* ctx, GSocketHandle sock, glbpkg* pkg, int* recvd, struct sockaddr* from_addr, glbaddrlen_t* addr_len);
 
 #endif
