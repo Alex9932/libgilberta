@@ -45,6 +45,11 @@
 #define GLB_RETRANSMISSION_TIMEOUT 100 // ms
 #define GLB_KEEPALIVE_RETRY 8 // keepalive retry count
 #define GLB_KEEPALIVE_TIME  200 // ms, keepalive interval (disconnect after GLB_KEEPALIVE_RETRY)
+#define GLB_EVENT_RESERVE  4 // Event queue reserve
+
+static inline int32_t glb_seqdiff(uint32_t a, uint32_t b) {
+	return (int32_t)(a - b);
+}
 
 static void glbpkg_init(glbpkg* pkg, glbconid_t conn_id, uint8_t ctrl_flags, uint8_t channel) {
 	pkg->header.magic       = GILBERTA_PROTO_MAGIC;
@@ -80,7 +85,9 @@ int glb_connect(glbctx_t* ctx) {
 	// Use first element in client mode
 	glbconn_t* con = &ctx->connections[0];
 
-	glbctx_generateseq(ctx, con, 0);
+	if (glbctx_generateseq(ctx, con, 0) != GLB_SUCCESS) {
+		return GLB_ERROR_UNKNOWN;
+	}
 
 	con->conn_id.generation = 0x00;
 	con->conn_id.id = 0xFFFF;
@@ -261,8 +268,10 @@ int glb_tick(glbctx_t* ctx) {
 				}
 
 				// Generate new client id & sequence
-				glbctx_generateclientid(ctx, &con->conn_id);
-				glbctx_generateseq(ctx, con, pkg.header.seq); // New seq, sync ack
+				if (glbctx_generateclientid(ctx, &con->conn_id) != GLB_SUCCESS || 
+					glbctx_generateseq(ctx, con, pkg.header.seq) != GLB_SUCCESS) { // New seq, sync ack
+					continue; // Client repeat SYN
+				}
 			}
 
 			if (con->state == GLB_CONNECTION_ESTABLISHED) {
@@ -306,11 +315,20 @@ int glb_tick(glbctx_t* ctx) {
 			if (con->state != GLB_CONNECTION_ESTABLISHED) {
 				con->state = GLB_CONNECTION_ESTABLISHED;
 
+				glbevent_t event = { 0 };
+
 				// Make channels
-				glbctx_createconchannels(ctx, con);
+				//glbctx_createconchannels(ctx, con);
+				if (glbctx_createconchannels(ctx, con) != GLB_SUCCESS) {
+					con->state = GLB_CONNECTION_CLOSED;
+					event.type = GLB_EVENT_DISCONNECT;
+					event.disconnect.connection = con;
+					event.disconnect.reason = GLB_DISCONNECT_RESET;
+					glbqueue_push(ctx->eventqueue, &event);
+					continue;
+				}
 				glbctx_writeack(ctx, con, pkg.header.seq);
 				// Generate event
-				glbevent_t event = { 0 };
 				event.type = GLB_EVENT_CONNECT;
 				event.connect.connection = con;
 				glbqueue_push(ctx->eventqueue, &event);
@@ -331,6 +349,19 @@ int glb_tick(glbctx_t* ctx) {
 			// Send ACK
 			// Set connection as ESTABLISHED
 			glbconn_t* con = &ctx->connections[0];
+
+			if (con->state != GLB_CONNECTION_SYN_SENT && con->state != GLB_CONNECTION_ESTABLISHED) {
+				continue;
+			}
+
+			if (glbctx_addrequal(&con->peer_addr, &from_addr) != GLB_SUCCESS) {
+				continue;
+			}
+
+			if (pkg.header.ack != con->seq) {
+				continue;
+			}
+
 			if (con->state == GLB_CONNECTION_SYN_SENT) {
 				con->conn_id.generation = headerptr->client_gen;
 				con->conn_id.id = headerptr->client_id;
@@ -338,11 +369,20 @@ int glb_tick(glbctx_t* ctx) {
 
 			if (con->state != GLB_CONNECTION_ESTABLISHED) {
 
+				glbevent_t event = { 0 };
+
 				// Make channels
-				glbctx_createconchannels(ctx, con);
+				//glbctx_createconchannels(ctx, con);
+				if (glbctx_createconchannels(ctx, con) != GLB_SUCCESS) {
+					con->state = GLB_CONNECTION_CLOSED;
+					event.type = GLB_EVENT_DISCONNECT;
+					event.disconnect.connection = con;
+					event.disconnect.reason = GLB_DISCONNECT_RESET;
+					glbqueue_push(ctx->eventqueue, &event);
+					continue;
+				}
 
 				// Generate event
-				glbevent_t event = { 0 };
 				event.type = GLB_EVENT_CONNECT;
 				event.connect.connection = con;
 				glbqueue_push(ctx->eventqueue, &event);
@@ -473,7 +513,8 @@ int glb_tick(glbctx_t* ctx) {
 
 			// Сheck sequence number, drop duplicates, etc.
 #if 1
-			if (headerptr->seq < channel->ack && channel->flags & GLB_CHANNEL_FLAG_RELIABLE) {
+			//if (headerptr->seq < channel->ack && channel->flags & GLB_CHANNEL_FLAG_RELIABLE) {
+			if(glb_seqdiff(headerptr->seq, channel->ack) < 0 && channel->flags & GLB_CHANNEL_FLAG_RELIABLE) {
 				// Old packet
 				snprintf(buffer, 128, "[gilberta] Old packet detected! Sequence number %u, expected %u (channel: %u)", headerptr->seq, channel->ack, (uint32_t)headerptr->channel_id);
 				ctx->logger(GLB_LOG_DEBUG, buffer);
@@ -490,7 +531,8 @@ int glb_tick(glbctx_t* ctx) {
 				continue;
 			}
 
-			if (headerptr->seq > channel->ack && channel->flags & GLB_CHANNEL_FLAG_RELIABLE) {
+			//if (headerptr->seq > channel->ack && channel->flags & GLB_CHANNEL_FLAG_RELIABLE) {
+			if (glb_seqdiff(headerptr->seq, channel->ack) > 0 && channel->flags & GLB_CHANNEL_FLAG_RELIABLE) {
 				// packet from future
 #else
 			if (headerptr->seq != channel->ack) {
@@ -516,7 +558,10 @@ int glb_tick(glbctx_t* ctx) {
 
 
 			glbqueue* queue = channel->r_queue;
-			glbqueue_push(queue, &pkg);
+			if (glbqueue_is_full(queue) || glbqueue_size(ctx->eventqueue) + GLB_EVENT_RESERVE >= ctx->eventqueue->capacity) {
+				ctx->logger(GLB_LOG_DEBUG, "[gilberta] Receive queue full, packet dropped");
+				continue;
+			}
 
 			//printf("[gilberta] DATA RECVD [channel seq:%u ack:%u] [header seq:%u ack:%u]\n",
 			//	channel->seq, channel->ack,
@@ -524,12 +569,14 @@ int glb_tick(glbctx_t* ctx) {
 			//);
 
 
+			glbqueue_push(queue, &pkg);
 			channel->ack++;// = headerptr->seq; // Update ack for this channel
 
 			// Send ACK for this data packet if reliable delivery channel
+			uint32_t cid = headerptr->channel_id; // Save channel id
+			uint32_t ack = headerptr->seq; // Save sequence
 			if (channel->flags & GLB_CHANNEL_FLAG_RELIABLE) {
-				uint32_t ack = headerptr->seq; // Save sequence
-				glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_ACK | GLB_CTRL_FLAG_DATA, headerptr->channel_id);
+				glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_ACK | GLB_CTRL_FLAG_DATA, cid);
 				pkg.header.ack = ack;
 				pkg.header.seq = channel->seq;
 				//printf("SEND s:%u a:%u\n", pkg.header.seq, pkg.header.ack);
@@ -539,7 +586,7 @@ int glb_tick(glbctx_t* ctx) {
 			glbevent_t event = { 0 };
 			event.type = GLB_EVENT_RECEIVE;
 			event.receive.connection = con;
-			event.receive.channel = headerptr->channel_id;
+			event.receive.channel = cid;
 			glbqueue_push(ctx->eventqueue, &event);
 
 			continue;
@@ -878,6 +925,31 @@ int glb_popdata(glbctx_t* ctx, glbrecvinfo_t* info) {
 		return GLB_ERROR_INVALID_ARGUMENT;
 	}
 
+#if 1
+	glbconn_t* con = info->con;
+
+	if (con->state != GLB_CONNECTION_ESTABLISHED || !con->channels) {
+		info->datalen = 0;
+		return GLB_ERROR_CONNECTION_CLOSED;
+	}
+
+	glbqueue* queue = info->con->channels[info->channel_id].r_queue;
+	glbpkg* pkg_ = NULL;
+
+	if (glbqueue_peek(queue, (void**)&pkg_) != GLB_SUCCESS) {
+		info->datalen = 0;
+		return GLB_ERROR_QUEUE_EMPTY; // No data available
+	}
+
+	if (info->buflen < pkg_->header.payload_len) {
+		return GLB_ERROR_INVALID_ARGUMENT; // Buffer too small
+	}
+
+	memcpy(info->buffer, pkg_->data, pkg_->header.payload_len);
+	info->datalen = pkg_->header.payload_len;
+	glbqueue_pop(queue, NULL);
+
+#else
 	glbqueue* queue = info->con->channels[info->channel_id].r_queue;
 
 	glbpkg* pkg_ = NULL;
@@ -895,7 +967,7 @@ int glb_popdata(glbctx_t* ctx, glbrecvinfo_t* info) {
 		memcpy(info->buffer, pkg.data, pkg.header.payload_len);
 		info->datalen = pkg.header.payload_len;
 	}
-
+#endif
 	return GLB_SUCCESS;
 }
 

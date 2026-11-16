@@ -64,8 +64,6 @@ struct glbctx_t {
 	int           error;            /**< Last error code */
 	uint8_t       flags;            /**< Context flags (GLB_FLAG_*) */
 	uint8_t       channel_count;    /**< Number of channels per connection */
-	uint16_t      client_gen;       /**< Current client ID generation */
-	uint16_t      client_id;        /**< Current client ID */
 
 	uint16_t      recv_limit;       /**< Receive packet limit per one glb_tick() */
 	uint16_t      send_limit;       /**< Transmit packet limit per one glb_tick() */
@@ -121,11 +119,12 @@ int glbctx_destroy(glbctx_t* ctx);
  *
  * @param ctx Context (not NULL).
  * @param dst [out] Structure to populate (not NULL).
+ * @return GLB_SUCCESS on success, GLB_ERROR_INVALID_ARGUMENT if ctx == NULL or dst == NULL.
  *
  * @note IDs are used to identify clients during NAT/IP changes.
  * @see glbconid_t
  */
-void glbctx_generateclientid(glbctx_t* ctx, glbconid_t* dst);
+int glbctx_generateclientid(glbctx_t* ctx, glbconid_t* dst);
 
 /**
  * @brief Find a free connection slot.

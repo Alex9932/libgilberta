@@ -21,3 +21,8 @@ project "libgilberta"
 		symbols "On"
 		runtime "Release"
 		staticruntime "Off"
+
+	filter "system:windows"
+		links { "bcrypt" }
+
+	filter {}

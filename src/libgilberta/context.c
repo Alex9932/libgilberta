@@ -13,6 +13,7 @@
 
 #include "context.h"
 #include "glbio.h"
+#include "glbrnd.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h> // memset
@@ -248,8 +249,6 @@ glbctx_t* glbctx_create(const glbcfg_t* config) {
 	ctx->channel_count = config->channel_count;
 	ctx->inet_port = config->port;
 
-	ctx->client_gen = 0;
-	ctx->client_id = 1;
 	ctx->recv_limit = 0;
 
 	// glbconn_t array is placed right after glbctx_t structure
@@ -341,14 +340,23 @@ int glbctx_destroy(glbctx_t* ctx) {
 	return GLB_SUCCESS;
 }
 
-void glbctx_generateclientid(glbctx_t* ctx, glbconid_t* dst) {
-	dst->generation = ctx->client_gen;
-	dst->id = ctx->client_id;
-	ctx->client_id++;
-	if (ctx->client_id == 0xFFFF) {
-		ctx->client_id = 0;
-		dst->generation++;
+int glbctx_generateclientid(glbctx_t* ctx, glbconid_t* dst) {
+	for (int attempt = 0; attempt < 16; attempt++) {
+		uint32_t r;
+		if (glbrand_u32(&r) != GLB_SUCCESS) { return GLB_ERROR_UNKNOWN; }
+
+		uint16_t gen = (uint16_t)(r >> 16);
+		uint16_t id = (uint16_t)(r & 0xFFFFu);
+
+		if (id == 0xFFFFu) { continue; } // ACK reserved
+		if (glbctx_findconn(ctx, gen, id)) { continue; }
+
+		dst->generation = gen;
+		dst->id = id;
+		return GLB_SUCCESS;
 	}
+
+	return GLB_ERROR_UNKNOWN;
 }
 
 glbconn_t* glbctx_findemptyconn(glbctx_t* ctx) {
@@ -388,12 +396,11 @@ glbconn_t* glbctx_findconnbyaddr(glbctx_t* ctx, glbaddr_t* addr) {
 }
 
 int glbctx_generateseq(glbctx_t* ctx, glbconn_t* con, uint32_t ack) {
-	if (!ctx || !con) {
-		return GLB_ERROR_INVALID_ARGUMENT;
-	}
+	if (!ctx || !con) { return GLB_ERROR_INVALID_ARGUMENT; }
 
-	// TODO: Use random number
-	con->seq = (uint32_t)((size_t)ctx & 0xFFFFFFFF) ^ 0xA5A5A5A5;
+	uint32_t seq;
+	if (glbrand_u32(&seq) != GLB_SUCCESS) { return GLB_ERROR_UNKNOWN; }
+	con->seq = seq;
 	con->ack = ack;
 
 	return GLB_SUCCESS;
