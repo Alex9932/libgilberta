@@ -239,6 +239,7 @@ glbctx_t* glbctx_create(const glbcfg_t* config) {
 		ctx->connections[i].state = GLB_CONNECTION_CLOSED;
 	}
 
+	// Make IPv4 socket
 	if (use_v4) {
 		if (GLB_CreateSocket(ctx, config, &ctx->sock, AF_INET) != GLB_SUCCESS) {
 			ctx->allocator.free(ctx);
@@ -246,6 +247,7 @@ glbctx_t* glbctx_create(const glbcfg_t* config) {
 		}
 	}
 
+	// Make IPv6 socket
 	if (use_v6) {
 		if (GLB_CreateSocket(ctx, config, &ctx->sock, AF_INET6) != GLB_SUCCESS) {
 			ctx->allocator.free(ctx);
@@ -253,6 +255,7 @@ glbctx_t* glbctx_create(const glbcfg_t* config) {
 		}
 	}
 
+	// Bind socket in server mode (v4 or v6 NOT BOTH)
 	if (is_server && ctx->sock != SOCKET_NULL_HANDLE) {
 		if (GLB_BindSocket(ctx, config, ctx->sock, AF_INET) != GLB_SUCCESS) {
 			GLB_CloseSocket(&ctx->sock);
@@ -379,9 +382,29 @@ int glbctx_addrequal(glbaddr_t* a, glbaddr_t* b) {
 		return GLB_ERROR_INVALID_ARGUMENT;
 	}
 
-	if (a->sin_addr.s_addr == b->sin_addr.s_addr && a->sin_port == b->sin_port) {
-		return GLB_SUCCESS;
+	if (a->ss_family != b->ss_family) {
+		return GLB_ERROR_UNKNOWN; // Missmatch
 	}
 
-	return GLB_ERROR_UNKNOWN; // Return "generic" error (missmatch)
+	if (a->ss_family == AF_INET) {
+		// Check for IPv4
+		const struct sockaddr_in* a4 = (const struct sockaddr_in*)a;
+		const struct sockaddr_in* b4 = (const struct sockaddr_in*)b;
+		return a4->sin_addr.s_addr == b4->sin_addr.s_addr && a4->sin_port == b4->sin_port
+			? GLB_SUCCESS
+			: GLB_ERROR_UNKNOWN;
+	}
+
+	if (a->ss_family == AF_INET6) {
+		// Check for IPv6
+		const struct sockaddr_in6* a6 = (const struct sockaddr_in6*)a;
+		const struct sockaddr_in6* b6 = (const struct sockaddr_in6*)b;
+		return a6->sin6_port == b6->sin6_port && a6->sin6_scope_id == b6->sin6_scope_id &&
+			memcmp(&a6->sin6_addr, &b6->sin6_addr, sizeof(struct in6_addr)) == 0
+			? GLB_SUCCESS
+			: GLB_ERROR_UNKNOWN;
+	}
+
+	// Unknown family
+	return GLB_ERROR_UNKNOWN;
 }
