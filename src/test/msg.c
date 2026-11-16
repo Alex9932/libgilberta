@@ -10,7 +10,8 @@
 
 #define MIN(a,b) (((a) < (b)) ? (a) : (b))
 
-static uint8_t     isClient    = 0;
+static uint8_t     is_client   = 0;
+static uint8_t     is_ipv6     = 0;
 static const char* address     = NULL;
 static const char* clientname  = NULL;
 
@@ -45,12 +46,31 @@ static void log_callback(GLBLogLevel level, const char* message) {
 
 static int ProcessArgs(int argc, char** argv) {
 	// -c <ip:port> for client mode, otherwise server mode
+
+	for (int i = 1; i < argc; i++) {
+		if (strcmp(argv[i], "-6") == 0) {
+			is_ipv6 = 1;
+		}
+		else if (strcmp(argv[i], "-c") == 0) {
+			if (i + 1 >= argc) { return 1; }
+			is_client = 1;
+			address   = argv[++i];
+			if (i + 1 < argc) {
+				clientname = argv[++i];
+			}
+		}
+		else {
+			return 1;
+		}
+	}
+
+#if 0
 	if (argc > 4) { return 1; } // too many args
 
 	if (argc < 2) { return 0; } // no args, default to server mode
 
 	if (strcmp(argv[1], "-c") == 0 && (argc == 3 || argc == 4)) {
-		isClient = 1;
+		is_client = 1;
 		address = argv[2];
 		if (argc == 4) {
 			clientname = argv[3];
@@ -59,7 +79,7 @@ static int ProcessArgs(int argc, char** argv) {
 	else {
 		return 1; // invalid args
 	}
-
+#endif
 	return 0;
 }
 
@@ -81,7 +101,10 @@ static void LaunchClient() {
 	glbcfg_t config = { 0 };
 	config.ip              = address;
 	config.port            = 12345;
-	config.flags           = 0;
+	config.flags           = GLB_FLAG_NETWORK_V4;
+	if (is_ipv6) {
+		config.flags       = GLB_FLAG_NETWORK_V6;
+	}
 	config.alloc           = &allocator;
 	config.log             = &logger;
 	config.max_connections = 16;
@@ -204,7 +227,7 @@ static void LaunchServer() {
 	glbcfg_t config = { 0 };
 	config.ip              = NULL;
 	config.port            = 12345;
-	config.flags           = GLB_FLAG_BIND_PORT;
+	config.flags           = GLB_FLAG_BIND_PORT | GLB_FLAG_NETWORK_MIXED;
 	config.alloc           = &allocator;
 	config.log             = &logger;
 	config.max_connections = 16;
@@ -326,7 +349,7 @@ int ModuleMain(int argc, char** argv, Allocator* alloc) {
 	channels[0].flags = GLB_CHANNEL_FLAG_RELIABLE;
 	channels[0].priority = 0;
 
-	if (isClient) {
+	if (is_client) {
 		LaunchClient();
 	}
 	else {

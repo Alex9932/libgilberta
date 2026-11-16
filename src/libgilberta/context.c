@@ -117,12 +117,10 @@ static int GLB_CloseSocket(GSocketHandle* sock) {
 
 static int GLB_BindSocket(glbctx_t* ctx, const glbcfg_t* config, GSocketHandle sock, int family) {
 	char logbuf[256];
-
-	snprintf(logbuf, sizeof(logbuf), "[gilberta] Binding socket to %s:%d...", ctx->inet_addr, ctx->inet_port);
-	ctx->logger(GLB_LOG_INFO, logbuf);
+	char ipbuff[128];
 
 	if (family == AF_INET) {
-		struct sockaddr_in addr4 = {0};
+		struct sockaddr_in addr4 = { 0 };
 		addr4.sin_family = AF_INET;
 		addr4.sin_port = htons(ctx->inet_port);
 		if (config->ip) {
@@ -132,6 +130,9 @@ static int GLB_BindSocket(glbctx_t* ctx, const glbcfg_t* config, GSocketHandle s
 		} else {
 			addr4.sin_addr.s_addr = htonl(INADDR_ANY);
 		}
+		inet_ntop(AF_INET, &addr4.sin_addr, ipbuff, sizeof(ipbuff));
+		snprintf(logbuf, sizeof(logbuf), "[gilberta] Binding IPv4 socket to %s:%d...", ipbuff, ctx->inet_port);
+		ctx->logger(GLB_LOG_INFO, logbuf);
 		if (bind(sock, (struct sockaddr*)&addr4, sizeof(addr4)) == 0) {
 			return GLB_SUCCESS;
 		}
@@ -147,6 +148,9 @@ static int GLB_BindSocket(glbctx_t* ctx, const glbcfg_t* config, GSocketHandle s
 		} else {
 			addr6.sin6_addr = in6addr_any;
 		}
+		inet_ntop(AF_INET6, &addr6.sin6_addr, ipbuff, sizeof(ipbuff));
+		snprintf(logbuf, sizeof(logbuf), "[gilberta] Binding IPv6 socket to %s:%d...", ipbuff, ctx->inet_port);
+		ctx->logger(GLB_LOG_INFO, logbuf);
 		if (bind(sock, (struct sockaddr*)&addr6, sizeof(addr6)) == 0) {
 			return GLB_SUCCESS;
 		}

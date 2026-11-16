@@ -315,7 +315,7 @@ int glb_tick(glbctx_t* ctx) {
 				event.connect.connection = con;
 				glbqueue_push(ctx->eventqueue, &event);
 
-				printf("Connection established! SEQ: %u, ACK: %u\n", con->channels[0].seq, con->channels[0].ack);
+				//printf("Connection established! SEQ: %u, ACK: %u\n", con->channels[0].seq, con->channels[0].ack);
 
 				con->keepalive_retry = 0;
 				glbtime_start(&con->keepalive, GLB_KEEPALIVE_TIME); // Start timer for PING (keep-alive)
@@ -352,7 +352,7 @@ int glb_tick(glbctx_t* ctx) {
 
 				con->ack = pkg.header.seq;
 				glbctx_writeack(ctx, con, pkg.header.seq);
-				printf("Connection established! SEQ: %u, ACK: %u\n", con->channels[0].seq, con->channels[0].ack);
+				//printf("Connection established! SEQ: %u, ACK: %u\n", con->channels[0].seq, con->channels[0].ack);
 
 			} // Else just resend ACK for SYN ACK server packet
 
@@ -360,11 +360,13 @@ int glb_tick(glbctx_t* ctx) {
 				// TODO
 				// Error: Desync
 				ctx->logger(GLB_LOG_ERROR, "[gilberta] Connection desync!");
+#if DEBUG
 				printf("[gilberta] Channel (S: %u, A: %u), header (S: %u, A: %u), init (S: %u, A: %u)\n",
 					con->channels[0].seq, con->channels[0].ack,
 					headerptr->seq, headerptr->ack,
 					con->seq, con->ack
 				);
+#endif
 			}
 
 			glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_ACK, 0);
