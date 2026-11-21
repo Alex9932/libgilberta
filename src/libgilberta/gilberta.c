@@ -79,6 +79,7 @@ int glb_destroy(glbctx_t* ctx) {
 	return glbctx_destroy(ctx);
 }
 
+// TODO: Add getaddrinfo(AF_UNSPEC) to resolve domain names
 int glb_connect(glbctx_t* ctx) {
 	if (!ctx) return GLB_ERROR_INVALID_ARGUMENT;
 

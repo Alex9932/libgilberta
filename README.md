@@ -5,6 +5,7 @@
 
 **Gilberta** is a lightweight C library for real-time data exchange between applications.  
 It provides a simple non‑blocking API over UDP with priority channels, delivery control (reliable/retransmission/ordering), and a clean event‑driven model.
+Gilberta does not create background networking threads. Call `glb_tick()` from your own main loop and retrieve the resulting events with `glb_pollevent()`.
 
 ## 🎯 Why "Gilberta"?
 
@@ -21,12 +22,66 @@ ENet is good, RakNet is heavy, and writing your own wheel is a tradition. Gilber
 - Cross‑platform: Windows (MSVC), Linux, macOS (POSIX).
 - Little‑endian architectures only (x86/x86‑64, ARM/ARM64, RISC‑V). No big‑endian support.
 - Channel‑based messaging with priority levels (last one is not implemented yet).
+- IPv4 and IPv6 (with dual-stack server) support.
 - UDP transport with control flags (SYN/ACK/FIN/RST/PING).
 - Reliable delivery option with retransmission and ordering.
-- Custom memory allocator and logging hooks.
 - Event polling with `glb_pollevent()`.
+- Cryptographically secure random identifiers and sequence numbers.
+- RTT measurement and connection statistics.
+- Optional custom memory allocator and logging hooks.
 
-## Protocol Header
+### Current status
+
+Gilberta is under active development. The public API and wire protocol may change.
+
+- Channel priority values are part of the configuration API, but priority-based scheduling is not implemented yet.
+- Reliable channels currently use a stop-and-wait mechanism. Selective Repeat is not implemented.
+- The protocol header uses host byte order. Only little-endian hosts are supported; big-endian interoperability is not available.
+
+## 🌐 Network Configuration
+
+Network mode is selected through the `flags` field of `glbcfg_t`.
+
+| Flag | Description |
+|------|-------------|
+| `GLB_FLAG_NETWORK_V4` | Use IPv4 |
+| `GLB_FLAG_NETWORK_V6` | Use IPv6 |
+| `GLB_FLAG_NETWORK_MIXED` | Use IPv4 and IPv6 (server mode) |
+| `GLB_FLAG_BIND_PORT` | Server mode: bind to the configured port |
+
+If neither `GLB_FLAG_NETWORK_V4` nor `GLB_FLAG_NETWORK_V6` is specified, IPv4 is used by default.
+A client uses one address family at a time. A server can use `GLB_FLAG_NETWORK_MIXED` to create and bind both sockets.
+
+The `ip` field must contain an address literal matching the selected family:
+- IPv4 example: `"192.0.2.10"`
+- IPv6 example: `"2001:db8::10"`
+- For a server listening on all interfaces, set `ip = NULL`. In mixed mode, use `NULL` so both sockets bind to their respective wildcard addresses.
+
+### IPv6 client configuration
+
+The following is the network-specific part of a client configuration:
+
+```c
+glbcfg_t cfg = {
+    .ip = "2001:db8::10",
+    .port = 8080,
+    .flags = GLB_FLAG_NETWORK_V6,
+    // Set the remaining configuration fields as usual.
+};
+```
+
+### Dual-stack server configuration
+
+```c
+glbcfg_t cfg = {
+    .ip = NULL,
+    .port = 8080,
+    .flags = GLB_FLAG_BIND_PORT | GLB_FLAG_NETWORK_MIXED,
+    // Set the remaining configuration fields as usual.
+};
+```
+
+## 📦 Protocol Header
 
 | Field          | Type      | Description |
 |----------------|-----------|-------------|
@@ -201,6 +256,19 @@ int main() {
 }
 ```
 
+## 📬 Events and Connection Management
+
+Call `glb_tick(ctx)` regularly from your application's main loop, then drain the event queue with `glb_pollevent()`.
+
+| Event | Meaning |
+|-------|---------|
+| `GLB_EVENT_CONNECT` | A connection has been established |
+| `GLB_EVENT_DISCONNECT` | A connection has been closed; inspect `ev.disconnect.reason` |
+| `GLB_EVENT_RECEIVE` | Data is available; retrieve it with `glb_popdata()` |
+| `GLB_EVENT_MIGRATION` | The peer address associated with a connection has changed |
+| `GLB_EVENT_STALLED` | A reliable channel did not receive an ACK; inspect `ev.stalled` |
+| `GLB_EVENT_ERROR` | An error event (reserved for further use) |
+
 ## 🧪 More Examples
 Check out the `src/test/` directory for ready-to-run examples:
 - **`echo.c`** — minimal echo test to verify the setup
@@ -208,14 +276,20 @@ Check out the `src/test/` directory for ready-to-run examples:
 
 ## 📚 API Overview
 
-Full API documentation is in the header file `libgilberta.h` (with Doxygen‑style comments).  
+The public API is declared in `include/libgilberta.h`. The header contains Doxygen-style comments.
 Key functions:
 
-- `glb_create` / `glb_destroy` – context lifecycle.
-- `glb_connect` – connect to server (client only).
-- `glb_close` – close a specific connection.
-- `glb_send` – send data on a channel.
-- `glb_pollevent` – non‑blocking event retrieval.
+| Function | Description |
+|----------|-------------|
+| `glb_create()` / `glb_destroy()` | Create and destroy a library context |
+| `glb_connect()` | Initiate a connection (client mode) |
+| `glb_close()` | Close a connection |
+| `glb_send()` | Enqueue data for sending |
+| `glb_tick()` | Process network I/O, retransmissions and timeouts |
+| `glb_pollevent()` | Retrieve the next event from the event queue |
+| `glb_popdata()` | Retrieve received message data |
+| `glb_getconinfo()` | Get peer address and connection statistics |
+| `glb_geterror()` / `glb_getstring()` | Retrieve error information and its description |
 
 ## 📜 License
 
@@ -233,4 +307,4 @@ Issues and pull requests are welcome on [GitHub](https://github.com/Alex9932/lib
 
 - The developers of *Arknights: Endfield* — for the character who inspired the library's name.
 - [Premake](https://premake.github.io/) for build system generation.
-- Event system inspired by SDL/Enet.
+- The event-driven API design was inspired by SDL/Enet.

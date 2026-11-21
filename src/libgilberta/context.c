@@ -237,7 +237,7 @@ glbctx_t* glbctx_create(const glbcfg_t* config) {
 		return NULL;
 	}
 
-	// Invlidate socket handles
+	// Invalidate socket handles
 	ctx->sock = SOCKET_NULL_HANDLE;
 	ctx->sock6 = SOCKET_NULL_HANDLE;
 
