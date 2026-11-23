@@ -125,19 +125,22 @@ typedef enum GLBLogLevel {
  * @see glb_geterror() @see glb_getstring()
  */
 typedef enum GLBErrorCode {
-	GLB_SUCCESS = 0,            /**< Operation completed successfully */
-	GLB_ERROR_UNKNOWN,          /**< Unknown/unclassified error */
-	GLB_ERROR_INVALID_ARGUMENT, /**< Invalid argument passed (NULL, wrong size, etc.) */
-	GLB_ERROR_OUT_OF_MEMORY,    /**< Failed to allocate memory */
-	GLB_ERROR_QUEUE_FULL,       /**< Queue is full, operation impossible */
-	GLB_ERROR_QUEUE_EMPTY,      /**< Queue is empty, operation impossible */
-	GLB_ERROR_MESSAGE_TOO_LONG, /**< Message exceeds MTU (1024 bytes) */
-	GLB_ERROR_SOCKET_CREATION,  /**< Failed to create UDP socket */
-	GLB_ERROR_SOCKET_BINDING,   /**< Failed to bind() socket to address */
-	GLB_ERROR_CONNECTION_CLOSED,/**< Connection is already closed or torn down */
-	GLB_ERROR_SEND_FAILED,      /**< Failed to send packet (sendto) */
-	GLB_ERROR_RECV_FAILED,      /**< Failed to receive packet (recvfrom) */
-	GLB_ERROR_MAX_ENUM = 0x7F   /**< Internal value — upper enum bound */
+	GLB_SUCCESS = 0,              /**< Operation completed successfully */
+	GLB_ERROR_UNKNOWN,            /**< Unknown/unclassified error */
+	GLB_ERROR_INVALID_ARGUMENT,   /**< Invalid argument passed (NULL, wrong size, etc.) */
+	GLB_ERROR_OUT_OF_MEMORY,      /**< Failed to allocate memory */
+	GLB_ERROR_QUEUE_FULL,         /**< Queue is full, operation impossible */
+	GLB_ERROR_QUEUE_EMPTY,        /**< Queue is empty, operation impossible */
+	GLB_ERROR_WINDOW_OUT_OF_RANGE,/**<  */
+	GLB_ERROR_WINDOW_DUPLICATE,   /**<  */
+	GLB_ERROR_WINDOW_INVALID_SEQ, /**<  */
+	GLB_ERROR_MESSAGE_TOO_LONG,   /**< Message exceeds MTU (1024 bytes) */
+	GLB_ERROR_SOCKET_CREATION,    /**< Failed to create UDP socket */
+	GLB_ERROR_SOCKET_BINDING,     /**< Failed to bind() socket to address */
+	GLB_ERROR_CONNECTION_CLOSED,  /**< Connection is already closed or torn down */
+	GLB_ERROR_SEND_FAILED,        /**< Failed to send packet (sendto) */
+	GLB_ERROR_RECV_FAILED,        /**< Failed to receive packet (recvfrom) */
+	GLB_ERROR_MAX_ENUM = 0x7F     /**< Internal value — upper enum bound */
 } GLBErrorCode;
 
 /* ================================= */

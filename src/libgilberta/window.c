@@ -21,7 +21,7 @@ typedef struct glbwnd_slot {
 } glbwnd_slot;
 
 glbwindow* glbwnd_init(glbctx_t* ctx, uint32_t capacity) {
-	if (!ctx || capacity == 0) {
+	if (!ctx || capacity == 0 || capacity > 32) {
 		if (ctx && ctx->logger) {
 			ctx->logger(GLB_LOG_ERROR, "[gilberta] Invalid arguments for window initialization");
 		}
@@ -47,8 +47,27 @@ void glbwnd_free(glbwindow* wnd) {
 	wnd->ctx->allocator.free(wnd);
 }
 
-int glbwnd_insert(glbwindow* wnd, const glbpkg* element) {
-	if (!wnd || !element) { return GLB_ERROR_INVALID_ARGUMENT; }
+int glbwnd_insert(glbwindow* wnd, const glbpkg* pkg) {
+	if (!wnd || !pkg) { return GLB_ERROR_INVALID_ARGUMENT; }
+
+	int32_t diff = (int32_t)(pkg->header.seq - wnd->base_seq);
+	if (diff < 0 || (uint32_t)diff >= wnd->capacity) {
+		return GLB_ERROR_WINDOW_OUT_OF_RANGE;
+	}
+
+	uint32_t index = pkg->header.seq % wnd->capacity;
+	glbwnd_slot* slots = (glbwnd_slot*)wnd->pool;
+
+	if (slots[index].occupied && slots[index].pkg.header.seq == pkg->header.seq) {
+		return GLB_ERROR_WINDOW_DUPLICATE;
+	}
+
+	if (slots[index].occupied && slots[index].pkg.header.seq != pkg->header.seq) {
+		return GLB_ERROR_WINDOW_INVALID_SEQ;
+	}
+
+	slots[index].pkg = *pkg;   // Copy data
+	slots[index].occupied = 1; // Mark slot
 
 	return GLB_SUCCESS;
 }
