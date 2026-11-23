@@ -42,11 +42,11 @@ static const GSocketHandle SOCKET_NULL_HANDLE = -1; /**< Invalid handle */
 /** @brief Maximum UDP packet payload size (excluding header). */
 #define GILBERTA_MTU 1024
 
-/** @brief Protocol magic number ('GB' = 0x4242). */
+/** @brief Protocol magic number ('GB' = 0x4247 LE). */
 #define GILBERTA_PROTO_MAGIC 0x4247 // 'GB'
 
-/** @brief Protocol version (current = 1). */
-#define GILBERTA_PROTO_VERSION 1
+/** @brief Protocol version (current = 2). */
+#define GILBERTA_PROTO_VERSION 2
 
 /* ================================= */
 /*  Address and ID types             */
@@ -170,7 +170,7 @@ typedef struct glbconn_t {
  * @struct glbpkgheader
  * @brief Gilberta protocol packet header.
  *
- * Size: 24 bytes. All fields in host byte order (little-endian).
+ * Size: 28 bytes. All fields in host byte order (little-endian).
  *
  * @note Checksum is computed only for data,
  *       excluding the header. For packets without payload checksum = 0xFFFF.
@@ -193,6 +193,7 @@ typedef struct glbpkgheader {
 	uint16_t wnd;            /**< Window size (flow control) */
 	uint32_t seq;            /**< Sequence number */
 	uint32_t ack;            /**< Acknowledgment number */
+	uint32_t ack_bits;       /**< Acknowledged packets */
 } glbpkgheader;
 
 /**

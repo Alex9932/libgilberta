@@ -47,7 +47,7 @@
  *   - Transfer control mechanisms (reliable delivery, retransmission, ordering)
  *
  * Protocol design (packet header):
- *   [Header] (24 bytes)
+ *   [Header] (28 bytes)
  *    uint16_t magic        // Magic number to identify Gilberta packets
  *    uint16_t payload_len; // Payload length
  *    uint8_t  version;     // Protocol version (1)
@@ -58,8 +58,9 @@
  *    uint16_t client_id;   // Client ID (0xFFFF for initiate connection)
  *    uint16_t checksum;    // CRC16 modbus checksum (data only, for header-only packet = 0xFFFF)
  *    uint16_t wnd;         // Window size
- *    uint32_t seq;         // Sequence number
- *    uint32_t ack;         // Acknowledgment number
+ *    uint32_t seq;         // Sequence number (sended packet)
+ *    uint32_t ack;         // Acknowledgment number (next expected packet number)
+ *    uint32_t ack_bits;    // Received packets
  *
  * Usage:
  *   - Create a context with glb_create() and a configuration.
@@ -155,8 +156,17 @@ typedef enum GLBErrorCode {
 /** @brief Use both IPv4 and IPv6 for UDP transport (server mode, listening socket only) */
 #define GLB_FLAG_NETWORK_MIXED (GLB_FLAG_NETWORK_V4 | GLB_FLAG_NETWORK_V6)
 
-/** @brief Channel flag: require reliable delivery (retransmission, ordering). */
-#define GLB_CHANNEL_FLAG_RELIABLE 0x01
+/** @brief Channel flag: require reliable delivery with ordering (retransmission, ordering). */
+#define GLB_CHANNEL_FLAG_RELIABLE_ORDERED     0x01
+
+/** @brief Channel flag: require reliable delivery without ordering (retransmission only). */
+#define GLB_CHANNEL_FLAG_RELIABLE_UNORDERED   0x02
+
+/** @brief Channel flag: unreliable delivery, newest packets only (ordering). */
+#define GLB_CHANNEL_FLAG_UNRELIABLE_SEQUENCED 0x03
+
+/** @brief Channel flag: unreliable delivery (raw UDP). */
+#define GLB_CHANNEL_FLAG_UNRELIABLE_UNORDERED 0x04
 
 /* ================================= */
 /*  Opaque types                     */
