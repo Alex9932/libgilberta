@@ -243,7 +243,7 @@ typedef struct glblog_t {
  */
 typedef struct glbchan_t {
 	uint8_t  priority; /**< Channel priority (0 = highest) */
-	uint8_t  flags;    /**< Combination of GLB_CHANNEL_FLAG_* */
+	uint8_t  flags;    /**< Combination of GLB_CHANNEL_FLAG_* (low 2 bits - transmission mode) */
 } glbchan_t;
 
 /**
