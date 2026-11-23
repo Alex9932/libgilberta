@@ -14,12 +14,6 @@
 #include "window.h"
 #include "context.h"
 
-typedef struct glbwnd_slot {
-	glbpkg pkg;
-	uint8_t occupied;
-	uint8_t _padding[7];
-} glbwnd_slot;
-
 glbwindow* glbwnd_init(glbctx_t* ctx, uint32_t capacity) {
 	if (!ctx || capacity == 0 || capacity > 32) {
 		if (ctx && ctx->logger) {
@@ -28,7 +22,7 @@ glbwindow* glbwnd_init(glbctx_t* ctx, uint32_t capacity) {
 		return NULL;
 	}
 
-	void* data = ctx->allocator.malloc(sizeof(glbwindow) + (size_t)capacity * sizeof(glbwnd_slot));
+	void* data = ctx->allocator.malloc(sizeof(glbwindow) + (size_t)capacity * sizeof(glbpkg));
 	if (!data) {
 		ctx->logger(GLB_LOG_ERROR, "[gilberta] Failed to allocate memory for window");
 		return NULL;
@@ -38,7 +32,9 @@ glbwindow* glbwnd_init(glbctx_t* ctx, uint32_t capacity) {
 	wnd->ctx = ctx;
 	wnd->pool = (void*)((char*)data + sizeof(glbwindow)); // Pool starts right after the window struct
 	wnd->capacity = capacity;
-	// TODO
+	wnd->base_seq = 0;
+	wnd->count = 0;
+	wnd->occupied = 0;
 	return wnd;
 }
 
@@ -47,27 +43,40 @@ void glbwnd_free(glbwindow* wnd) {
 	wnd->ctx->allocator.free(wnd);
 }
 
-int glbwnd_insert(glbwindow* wnd, const glbpkg* pkg) {
-	if (!wnd || !pkg) { return GLB_ERROR_INVALID_ARGUMENT; }
-
-	int32_t diff = (int32_t)(pkg->header.seq - wnd->base_seq);
+static inline int GLBWND_GET_INDEX(glbwindow* wnd, uint32_t seq, uint32_t* index, uint32_t* bit) {
+	int32_t diff = (int32_t)(seq - wnd->base_seq);
 	if (diff < 0 || (uint32_t)diff >= wnd->capacity) {
 		return GLB_ERROR_WINDOW_OUT_OF_RANGE;
 	}
 
-	uint32_t index = pkg->header.seq % wnd->capacity;
-	glbwnd_slot* slots = (glbwnd_slot*)wnd->pool;
+	*index = seq % wnd->capacity;
+	*bit = 1u << *index;
 
-	if (slots[index].occupied && slots[index].pkg.header.seq == pkg->header.seq) {
+	return GLB_SUCCESS;
+}
+
+int glbwnd_insert(glbwindow* wnd, const glbpkg* pkg) {
+	if (!wnd || !pkg) { return GLB_ERROR_INVALID_ARGUMENT; }
+
+	uint32_t seq = pkg->header.seq;
+	
+	glbpkg* slots = (glbpkg*)wnd->pool;
+	uint32_t index = 0;
+	uint32_t bit = 0;
+	int result = GLBWND_GET_INDEX(wnd, seq, &index, &bit);
+	if (result != GLB_SUCCESS) { return result; }
+
+	if (wnd->occupied & bit && slots[index].header.seq == pkg->header.seq) {
 		return GLB_ERROR_WINDOW_DUPLICATE;
 	}
 
-	if (slots[index].occupied && slots[index].pkg.header.seq != pkg->header.seq) {
+	if (wnd->occupied & bit && slots[index].header.seq != pkg->header.seq) {
 		return GLB_ERROR_WINDOW_INVALID_SEQ;
 	}
 
-	slots[index].pkg = *pkg;   // Copy data
-	slots[index].occupied = 1; // Mark slot
+	slots[index] = *pkg;
+	wnd->occupied |= bit;
+	wnd->count++;
 
 	return GLB_SUCCESS;
 }
@@ -75,17 +84,40 @@ int glbwnd_insert(glbwindow* wnd, const glbpkg* pkg) {
 int glbwnd_find(glbwindow* wnd, uint32_t seq, glbpkg* out_pkg) {
 	if (!wnd) { return GLB_ERROR_INVALID_ARGUMENT; }
 
+	glbpkg* slots = (glbpkg*)wnd->pool;
+	uint32_t index = 0;
+	uint32_t bit = 0;
+	int result = GLBWND_GET_INDEX(wnd, seq, &index, &bit);
+	if (result != GLB_SUCCESS) { return result; }
+
+	if (!(wnd->occupied & bit)) { return GLB_ERROR_WINDOW_EMPTY; }
+	if (slots[index].header.seq != seq) { return GLB_ERROR_WINDOW_INVALID_SEQ; }
+
+	if (out_pkg) { *out_pkg = slots[index]; }
 	return GLB_SUCCESS;
 }
 
 int glbwnd_remove(glbwindow* wnd, uint32_t seq, glbpkg* out_pkg) {
 	if (!wnd) { return GLB_ERROR_INVALID_ARGUMENT; }
 
+	glbpkg* slots = (glbpkg*)wnd->pool;
+	uint32_t index = 0;
+	uint32_t bit = 0;
+	int result = GLBWND_GET_INDEX(wnd, seq, &index, &bit);
+	if (result != GLB_SUCCESS) { return result; }
+
+	if (!(wnd->occupied & bit)) { return GLB_ERROR_WINDOW_EMPTY; }
+	if (slots[index].header.seq != seq) { return GLB_ERROR_WINDOW_INVALID_SEQ; }
+
+	if (out_pkg) { *out_pkg = slots[index]; }
+	wnd->occupied &= ~bit;
+	wnd->count--;
+
 	return GLB_SUCCESS;
 }
 
 void glbwnd_clear(glbwindow* wnd) {
 	if (!wnd) { return; }
-
-
+	wnd->occupied = 0;
+	wnd->count = 0;
 }

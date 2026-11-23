@@ -134,6 +134,7 @@ typedef enum GLBErrorCode {
 	GLB_ERROR_WINDOW_OUT_OF_RANGE,/**<  */
 	GLB_ERROR_WINDOW_DUPLICATE,   /**<  */
 	GLB_ERROR_WINDOW_INVALID_SEQ, /**<  */
+	GLB_ERROR_WINDOW_EMPTY,       /**<  */
 	GLB_ERROR_MESSAGE_TOO_LONG,   /**< Message exceeds MTU (1024 bytes) */
 	GLB_ERROR_SOCKET_CREATION,    /**< Failed to create UDP socket */
 	GLB_ERROR_SOCKET_BINDING,     /**< Failed to bind() socket to address */

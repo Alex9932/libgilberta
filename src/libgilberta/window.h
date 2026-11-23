@@ -20,6 +20,7 @@ typedef struct glbwindow {
 	uint32_t  capacity;     /**< Maximum capacity (in elements) */
 	uint32_t  base_seq;
 	uint32_t  count;
+	uint32_t  occupied;
 } glbwindow;
 
 glbwindow* glbwnd_init(glbctx_t* ctx, uint32_t capacity);
