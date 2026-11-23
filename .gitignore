@@ -4,6 +4,7 @@ obj/
 docs/html
 *.slnx
 *.vcxproj
+*.filters
 *.user
 Makefile
 *.make
