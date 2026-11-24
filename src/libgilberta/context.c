@@ -166,23 +166,38 @@ static int GLB_BindSocket(glbctx_t* ctx, const glbcfg_t* config, GSocketHandle s
 }
 
 int glbctx_createconchannels(glbctx_t* ctx, glbconn_t* con) {
+	if (!ctx || !con) {
+		return GLB_ERROR_INVALID_ARGUMENT;
+	}
+
 	con->channels = (glbchannel_t*)ctx->allocator.malloc(sizeof(glbchannel_t) * ctx->channel_count);
 	if (!con->channels) {
 		return GLB_ERROR_OUT_OF_MEMORY;
 	}
 
-	for (size_t i = 0; i < ctx->channel_count; i++) {
-		con->channels[i].flags    = ctx->channel_configs[i].flags;
-		con->channels[i].priority = ctx->channel_configs[i].priority;
+	memset(con->channels, 0, sizeof(glbchannel_t) * ctx->channel_count);
 
-		con->channels[i].s_queue = glbqueue_init(ctx, sizeof(glbpkg), 32); // TODO: Make queue size configurable
-		con->channels[i].r_queue = glbqueue_init(ctx, sizeof(glbpkg), 32); // TODO: Make queue size configurable
-		if (!con->channels[i].s_queue || !con->channels[i].r_queue) {
+	for (size_t i = 0; i < ctx->channel_count; i++) {
+		glbchannel_t* channel = &con->channels[i];
+
+		channel->flags    = ctx->channel_configs[i].flags;
+		channel->priority = ctx->channel_configs[i].priority;
+
+		// TODO: Make queue size configurable
+		channel->s_queue = glbqueue_init(ctx, sizeof(glbpkg), 32);
+		channel->r_queue = glbqueue_init(ctx, sizeof(glbpkg), 32);
+		channel->tx_window = glbwnd_init(ctx, GLB_WINDOW_CAPACITY);
+		channel->rx_window = glbwnd_init(ctx, GLB_WINDOW_CAPACITY);
+
+		if (!channel->s_queue || !channel->r_queue ||
+			!channel->tx_window || !channel->rx_window) {
 			// Free previously allocated queues and channels
 			for (size_t j = 0; j <= i; j++) {
-				// We CAN pass NULL to glbqueue_free() because it checks for NULL internally, so we don't need to check here
+				// We CAN pass NULL to glbqueue_free() & glbwnd_free() because it checks for NULL internally, so we don't need to check here
 				glbqueue_free(con->channels[j].s_queue);
 				glbqueue_free(con->channels[j].r_queue);
+				glbwnd_free(con->channels[j].tx_window);
+				glbwnd_free(con->channels[j].rx_window);
 			}
 			ctx->allocator.free(con->channels);
 			con->channels = NULL;
@@ -197,10 +212,15 @@ int glbctx_freeconchannels(glbctx_t* ctx, glbconn_t* con) {
 	if (!con->channels) {
 		return GLB_ERROR_INVALID_ARGUMENT;
 	}
+
 	for (size_t i = 0; i < ctx->channel_count; i++) {
-		glbqueue_free(con->channels[i].s_queue);
-		glbqueue_free(con->channels[i].r_queue);
+		glbchannel_t* channel = &con->channels[i];
+		glbqueue_free(channel->s_queue);
+		glbqueue_free(channel->r_queue);
+		glbwnd_free(channel->tx_window);
+		glbwnd_free(channel->rx_window);
 	}
+
 	ctx->allocator.free(con->channels);
 	con->channels = NULL;
 	return GLB_SUCCESS;

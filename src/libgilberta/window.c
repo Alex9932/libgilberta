@@ -13,6 +13,7 @@
 
 #include "window.h"
 #include "context.h"
+#include "glbio.h"
 
 glbwindow* glbwnd_init(glbctx_t* ctx, uint32_t capacity) {
 	if (!ctx || capacity == 0 || capacity > 32) {
@@ -34,7 +35,7 @@ glbwindow* glbwnd_init(glbctx_t* ctx, uint32_t capacity) {
 	wnd->ctx = ctx;
 	wnd->pool = (void*)((char*)data + sizeof(glbwindow)); // Pool starts right after the window struct
 	wnd->capacity = capacity;
-	wnd->base_seq = 0;
+	//wnd->base_seq = 0;
 	wnd->count = 0;
 	wnd->occupied = 0;
 	return wnd;
@@ -46,10 +47,10 @@ void glbwnd_free(glbwindow* wnd) {
 }
 
 static inline int GLBWND_GET_INDEX(glbwindow* wnd, uint32_t seq, uint32_t* index, uint32_t* bit) {
-	int32_t diff = (int32_t)(seq - wnd->base_seq);
-	if (diff < 0 || (uint32_t)diff >= wnd->capacity) {
-		return GLB_ERROR_WINDOW_OUT_OF_RANGE;
-	}
+//	int32_t diff = (int32_t)(seq - wnd->base_seq);
+//	if (diff < 0 || (uint32_t)diff >= wnd->capacity) {
+//		return GLB_ERROR_WINDOW_OUT_OF_RANGE;
+//	}
 
 	*index = seq % wnd->capacity;
 	*bit = 1u << *index;
@@ -68,11 +69,11 @@ int glbwnd_insert(glbwindow* wnd, const glbpkg* pkg) {
 	int result = GLBWND_GET_INDEX(wnd, seq, &index, &bit);
 	if (result != GLB_SUCCESS) { return result; }
 
-	if (wnd->occupied & bit && slots[index].header.seq == pkg->header.seq) {
+	if ((wnd->occupied & bit) && slots[index].header.seq == pkg->header.seq) {
 		return GLB_ERROR_WINDOW_DUPLICATE;
 	}
 
-	if (wnd->occupied & bit && slots[index].header.seq != pkg->header.seq) {
+	if ((wnd->occupied & bit) && slots[index].header.seq != pkg->header.seq) {
 		return GLB_ERROR_WINDOW_INVALID_SEQ;
 	}
 

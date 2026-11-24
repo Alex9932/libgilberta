@@ -346,7 +346,7 @@ int ModuleMain(int argc, char** argv, Allocator* alloc) {
 	allocator.free   = alloc->freeptr;
 	logger.log_func = log_callback;
 
-	channels[0].flags = GLB_CHANNEL_FLAG_RELIABLE;
+	channels[0].flags = GLB_CHANNEL_FLAG_RELIABLE_ORDERED;
 	channels[0].priority = 0;
 
 	if (is_client) {

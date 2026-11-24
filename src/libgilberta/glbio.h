@@ -13,6 +13,7 @@
 
 #include "libgilberta.h"
 #include "queue.h"
+#include "window.h"
 #include "timer.h"
 
 #if defined(GILBERTA_WINDOWS)
@@ -104,14 +105,16 @@ typedef enum GLBConnState {
  * @see glbconn_t @see glbctx_createconchannels()
  */
 typedef struct glbchannel_t {
-	glbqueue* s_queue;    /**< Send queue (packets awaiting transmission) */
-	glbqueue* r_queue;    /**< Receive queue */
-	uint32_t  seq;        /**< Current sequence number (for sending) */
-	uint32_t  ack;        /**< Expected acknowledgment number (for receiving) */
-	uint8_t   flags;      /**< Channel flags (GLB_CHANNEL_FLAG_*) */
-	uint8_t   priority;   /**< Channel priority (0 = highest) */
-	uint8_t   padding[2]; /**< Padding for alignment */
-	uint32_t  padding1;   /**< Padding for alignment */
+	glbqueue*  s_queue;    /**< Send queue (packets awaiting transmission) */
+	glbqueue*  r_queue;    /**< Receive queue */
+	glbwindow* tx_window;  /**< Transmit window (in flight packets) */
+	glbwindow* rx_window;  /**< Reorder window */
+	uint32_t   seq;        /**< Current sequence number (for sending) */
+	uint32_t   ack;        /**< Expected acknowledgment number (for receiving) */
+	uint8_t    flags;      /**< Channel flags (GLB_CHANNEL_FLAG_*) */
+	uint8_t    priority;   /**< Channel priority (0 = highest) */
+	uint8_t    padding[2]; /**< Padding for alignment */
+	uint32_t   padding1;   /**< Padding for alignment */
 } glbchannel_t;
 
 /**

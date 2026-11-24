@@ -493,7 +493,7 @@ int glb_tick(glbctx_t* ctx) {
 			if (glbctx_addrequal(&con->peer_addr, (glbaddr_t*)&from_addr) != GLB_SUCCESS) {
 				// New address (potential NAT rebind or address migration)
 
-				if ((channel->flags & GLB_CHANNEL_FLAG_RELIABLE) && headerptr->seq == channel->ack) {
+				if ((channel->flags & GLB_CHANNEL_FLAG_RELIABLE_ORDERED) && headerptr->seq == channel->ack) {
 					ctx->logger(GLB_LOG_WARN, "[gilberta] Connection migrated to new address");
 					con->peer_addr = from_addr;
 					con->peer_addr_len = addr_len;
@@ -515,7 +515,7 @@ int glb_tick(glbctx_t* ctx) {
 			// Сheck sequence number, drop duplicates, etc.
 #if 1
 			//if (headerptr->seq < channel->ack && channel->flags & GLB_CHANNEL_FLAG_RELIABLE) {
-			if(glb_seqdiff(headerptr->seq, channel->ack) < 0 && channel->flags & GLB_CHANNEL_FLAG_RELIABLE) {
+			if(glb_seqdiff(headerptr->seq, channel->ack) < 0 && channel->flags & GLB_CHANNEL_FLAG_RELIABLE_ORDERED) {
 				// Old packet
 				snprintf(buffer, 128, "[gilberta] Old packet detected! Sequence number %u, expected %u (channel: %u)", headerptr->seq, channel->ack, (uint32_t)headerptr->channel_id);
 				ctx->logger(GLB_LOG_DEBUG, buffer);
@@ -533,7 +533,7 @@ int glb_tick(glbctx_t* ctx) {
 			}
 
 			//if (headerptr->seq > channel->ack && channel->flags & GLB_CHANNEL_FLAG_RELIABLE) {
-			if (glb_seqdiff(headerptr->seq, channel->ack) > 0 && channel->flags & GLB_CHANNEL_FLAG_RELIABLE) {
+			if (glb_seqdiff(headerptr->seq, channel->ack) > 0 && channel->flags & GLB_CHANNEL_FLAG_RELIABLE_ORDERED) {
 				// packet from future
 #else
 			if (headerptr->seq != channel->ack) {
@@ -576,7 +576,7 @@ int glb_tick(glbctx_t* ctx) {
 			// Send ACK for this data packet if reliable delivery channel
 			uint32_t cid = headerptr->channel_id; // Save channel id
 			uint32_t ack = headerptr->seq; // Save sequence
-			if (channel->flags & GLB_CHANNEL_FLAG_RELIABLE) {
+			if (channel->flags & GLB_CHANNEL_FLAG_RELIABLE_ORDERED) {
 				glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_ACK | GLB_CTRL_FLAG_DATA, cid);
 				pkg.header.ack = ack;
 				pkg.header.seq = channel->seq;
@@ -816,7 +816,7 @@ int glb_tick(glbctx_t* ctx) {
 
 						glbio_send(ctx, pkg_ptr, (struct sockaddr*)&con->peer_addr, con->peer_addr_len);
 
-						if ((chan->flags & GLB_CHANNEL_FLAG_RELIABLE) == 0) {
+						if ((chan->flags & GLB_CHANNEL_FLAG_RELIABLE_ORDERED) == 0) {
 							// Not reliable channel, pop the packet from the queue to avoid infinite retransmission
 							glbqueue_pop(chan->s_queue, NULL);
 							continue;

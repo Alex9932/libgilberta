@@ -14,15 +14,18 @@
 
 #include <stdint.h>
 #include "libgilberta.h"
-#include "glbio.h"
+
+#define GLB_WINDOW_CAPACITY 32u
+
+typedef struct glbpkg glbpkg;
 
 typedef struct glbwindow {
 	glbctx_t* ctx;          /**< Parent context (for allocator) */
 	void*     pool;         /**< Element storage buffer */
 	uint32_t  capacity;     /**< Maximum capacity (in elements) */
-	uint32_t  base_seq;
 	uint32_t  count;
 	uint32_t  occupied;
+	uint32_t  _padding; // Alignment: 8 bytes
 } glbwindow;
 
 glbwindow* glbwnd_init(glbctx_t* ctx, uint32_t capacity);
