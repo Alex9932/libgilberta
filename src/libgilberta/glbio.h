@@ -109,8 +109,14 @@ typedef struct glbchannel_t {
 	glbqueue*  r_queue;    /**< Receive queue */
 	glbwindow* tx_window;  /**< Transmit window (in flight packets) */
 	glbwindow* rx_window;  /**< Reorder window */
-	uint32_t   seq;        /**< Current sequence number (for sending) */
-	uint32_t   ack;        /**< Expected acknowledgment number (for receiving) */
+	//uint32_t   seq;        /**< Current sequence number (for sending) */
+	//uint32_t   ack;        /**< Expected acknowledgment number (for receiving) */
+	uint32_t   seq;        /**< Next sequence number to assign */
+	uint32_t   ack;        /**< Next expected RX sequence number */
+	uint32_t   tx_base;    /**< Oldest unacknowledged TX sequence */
+	uint32_t   tx_next;    /**< Next sequence number to transmit */
+	uint32_t   tx_acked;   /**< TX ACK bitmap (bit 0 = tx_base) */
+	uint32_t   rx_ackbits; /**< RX bitmap (bit 0 = ack + 1) */
 	uint8_t    flags;      /**< Channel flags (GLB_CHANNEL_FLAG_*) */
 	uint8_t    priority;   /**< Channel priority (0 = highest) */
 	uint8_t    padding[2]; /**< Padding for alignment */
@@ -193,10 +199,10 @@ typedef struct glbpkgheader {
 	uint16_t client_gen;     /**< Client ID generation */
 	uint16_t client_id;      /**< Client ID (0xFFFF for initiation) */
 	uint16_t checksum;       /**< CRC16 Modbus of data (0xFFFF if no data) */
-	uint16_t wnd;            /**< Window size (flow control) */
-	uint32_t seq;            /**< Sequence number */
-	uint32_t ack;            /**< Acknowledgment number */
-	uint32_t ack_bits;       /**< Acknowledged packets */
+	uint16_t wnd;            /**< Advertised receive window size (flow control) */
+	uint32_t seq;            /**< Packet sequence number */
+	uint32_t ack;            /**< Next expected sequence number */
+	uint32_t ack_bits;       /**< Selective ACK bitmap (bit 0 = ack + 1) */
 } glbpkgheader;
 
 /**

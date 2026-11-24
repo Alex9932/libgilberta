@@ -64,6 +64,7 @@ static void glbpkg_init(glbpkg* pkg, glbconid_t conn_id, uint8_t ctrl_flags, uin
 	pkg->header.wnd         = 0;
 	pkg->header.seq         = 0;
 	pkg->header.ack         = 0;
+	pkg->header.ack_bits    = 0;
 }
 
 int glb_geterror(glbctx_t* ctx) {

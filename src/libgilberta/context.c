@@ -432,8 +432,16 @@ int glbctx_writeack(glbctx_t* ctx, glbconn_t* con, uint32_t ack) {
 	}
 
 	for (size_t i = 0; i < ctx->channel_count; i++) {
-		con->channels[i].seq = con->seq;
-		con->channels[i].ack = ack;
+		glbchannel_t* channel = &con->channels[i];
+
+		channel->seq        = con->seq;
+		channel->ack        = ack;
+
+		channel->tx_base    = con->seq;
+		channel->tx_next    = con->seq;
+		channel->tx_acked   = 0;
+		channel->rx_ackbits = 0;
+
 	}
 
 	return GLB_SUCCESS;
