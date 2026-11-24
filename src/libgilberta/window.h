@@ -1,8 +1,10 @@
 /**
  * @file window.h
- * @brief TODO
+ * @brief Internal packet window management.
  *
- * TODO
+ * Defines the packet window structure and internal functions
+ * used to store, retrieve, and manage packets during reliable
+ * transmission.
  *
  * @note This header is not part of the public API.
  */

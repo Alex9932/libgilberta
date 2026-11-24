@@ -4,7 +4,7 @@
  * Copyright (c) 2026 Alex9932
  *
  * Module:    window.c
- * Purpose:   TODO
+ * Purpose:   Implements packet window management for reliable transmission.
  *
  * This file is part of the Gilberta library.
  * See the main header (libgilberta.h) for the public API and protocol design.
@@ -24,7 +24,9 @@ glbwindow* glbwnd_init(glbctx_t* ctx, uint32_t capacity) {
 
 	void* data = ctx->allocator.malloc(sizeof(glbwindow) + (size_t)capacity * sizeof(glbpkg));
 	if (!data) {
-		ctx->logger(GLB_LOG_ERROR, "[gilberta] Failed to allocate memory for window");
+		if (ctx->logger) {
+			ctx->logger(GLB_LOG_ERROR, "[gilberta] Failed to allocate memory for window");
+		}
 		return NULL;
 	}
 

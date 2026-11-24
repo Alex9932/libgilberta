@@ -1006,26 +1006,30 @@ int glb_getconinfo(glbconn_t* con, glbconinfo_t* info) {
 const char* glb_getstring(uint32_t code) {
 	switch (code) {
 		// Error codes
-		case GLB_SUCCESS:                 return "Success";
-		case GLB_ERROR_INVALID_ARGUMENT:  return "Invalid argument";
-		case GLB_ERROR_OUT_OF_MEMORY:     return "Out of memory";
-		case GLB_ERROR_QUEUE_FULL:        return "Queue full";
-		case GLB_ERROR_QUEUE_EMPTY:       return "Queue empty";
-		case GLB_ERROR_MESSAGE_TOO_LONG:  return "Message too long";
-		case GLB_ERROR_SOCKET_CREATION:   return "Socket creation failed";
-		case GLB_ERROR_SOCKET_BINDING:    return "Socket binding failed";
-		case GLB_ERROR_CONNECTION_CLOSED: return "Connection closed";
-		case GLB_ERROR_SEND_FAILED:       return "Send failed";
-		case GLB_ERROR_RECV_FAILED:       return "Receive failed";
+		case GLB_SUCCESS:                   return "Success";
+		case GLB_ERROR_INVALID_ARGUMENT:    return "Invalid argument";
+		case GLB_ERROR_OUT_OF_MEMORY:       return "Out of memory";
+		case GLB_ERROR_QUEUE_FULL:          return "Queue full";
+		case GLB_ERROR_QUEUE_EMPTY:         return "Queue empty";
+		case GLB_ERROR_WINDOW_OUT_OF_RANGE: return "Window out of range";
+		case GLB_ERROR_WINDOW_DUPLICATE:    return "Duplicate packet";
+		case GLB_ERROR_WINDOW_INVALID_SEQ:  return "Invalid sequence number";
+		case GLB_ERROR_WINDOW_EMPTY:        return "Window slot is empty";
+		case GLB_ERROR_MESSAGE_TOO_LONG:    return "Message too long";
+		case GLB_ERROR_SOCKET_CREATION:     return "Socket creation failed";
+		case GLB_ERROR_SOCKET_BINDING:      return "Socket binding failed";
+		case GLB_ERROR_CONNECTION_CLOSED:   return "Connection closed";
+		case GLB_ERROR_SEND_FAILED:         return "Send failed";
+		case GLB_ERROR_RECV_FAILED:         return "Receive failed";
 		// Disconnect reasons
-		case GLB_DISCONNECT_BY_PEER:      return "Disconnected by peer";
-		case GLB_DISCONNECT_TIMEOUT:      return "Disconnected by timeout";
-		case GLB_DISCONNECT_RESET:        return "Connection reset";
+		case GLB_DISCONNECT_BY_PEER:        return "Disconnected by peer";
+		case GLB_DISCONNECT_TIMEOUT:        return "Disconnected by timeout";
+		case GLB_DISCONNECT_RESET:          return "Connection reset";
 		// Events
-		case GLB_EVENT_CONNECT:           return "connect";
-		case GLB_EVENT_DISCONNECT:        return "disconnect";
-		case GLB_EVENT_RECEIVE:           return "receive";
-		case GLB_EVENT_ERROR:             return "error";
+		case GLB_EVENT_CONNECT:             return "connect";
+		case GLB_EVENT_DISCONNECT:          return "disconnect";
+		case GLB_EVENT_RECEIVE:             return "receive";
+		case GLB_EVENT_ERROR:               return "error";
 
 		default: return "Unknown code";
 	}
