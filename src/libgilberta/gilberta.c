@@ -194,14 +194,134 @@ int glb_send(glbctx_t* ctx, glbsendinfo_t* info) {
 	return GLB_SUCCESS;
 }
 
+static int glb_send_data_ack(glbctx_t* ctx, glbconn_t* con, glbchannel_t* channel, uint8_t channel_id, uint32_t seq) {
+	glbpkg ack_pkg = { 0 };
+
+	glbpkg_init(&ack_pkg, con->conn_id, GLB_CTRL_FLAG_ACK | GLB_CTRL_FLAG_DATA, channel_id);
+	ack_pkg.header.ack = seq;
+	ack_pkg.header.seq = channel->seq;
+
+	return glbio_send(ctx, &ack_pkg, (struct sockaddr*)&con->peer_addr, con->peer_addr_len);
+}
+
+static int glb_deliver_ordered(glbctx_t* ctx, glbconn_t* con, glbchannel_t* channel, glbpkg* pkg) {
+	glbqueue* queue = channel->r_queue;
+
+	if (glbqueue_is_full(queue) || glbqueue_size(queue) + GLB_EVENT_RESERVE >= ctx->eventqueue->capacity) {
+		return GLB_ERROR_QUEUE_FULL;
+	}
+
+	if (glbqueue_push(queue, pkg) != GLB_SUCCESS) {
+		return GLB_ERROR_QUEUE_FULL;
+	}
+
+	glbevent_t event = { 0 };
+	event.type = GLB_EVENT_RECEIVE;
+	event.receive.connection = con;
+	event.receive.channel = pkg->header.channel_id;
+	if (glbqueue_push(ctx->eventqueue, &event) != GLB_SUCCESS) {
+		return GLB_ERROR_QUEUE_FULL;
+	}
+
+	glb_send_data_ack(ctx, con, channel, pkg->header.channel_id, pkg->header.seq);
+
+	return GLB_SUCCESS;
+}
+
+static int glb_drain_rx_window(glbctx_t* ctx, glbconn_t* con, glbchannel_t* channel) {
+	for (;;) {
+		glbpkg buffered;
+
+		//
+		if (glbwnd_find(channel->rx_window, channel->ack, &buffered) != GLB_SUCCESS) {
+			break;
+		}
+
+		// Do not remove the packet if delivery is impossible
+		if (glb_deliver_ordered(ctx, con, channel, &buffered) != GLB_SUCCESS) {
+			break;
+		}
+
+		glbwnd_remove(channel->rx_window, channel->ack, NULL);
+
+		channel->ack++;
+		channel->rx_ackbits >>= 1;
+	}
+}
+
 static int glb_receive_data(glbctx_t* ctx, glbconn_t* con, glbchannel_t* channel, glbpkg* pkg) {
 
+	uint32_t seq        = pkg->header.seq;
+	uint8_t  channel_id = pkg->header.channel_id;
 
+	// Non ordered channels
+	if ((channel->flags & GLB_CHANNEL_FLAG_RELIABLE_ORDERED) == 0) {
+		glbqueue* queue = channel->r_queue;
+
+		if (glbqueue_is_full(queue) || glbqueue_size(queue) + GLB_EVENT_RESERVE >= ctx->eventqueue->capacity) {
+			return GLB_ERROR_QUEUE_FULL;
+		}
+
+		if (glbqueue_push(queue, pkg) != GLB_SUCCESS) {
+			return GLB_ERROR_QUEUE_FULL;
+		}
+
+		channel->ack++;
+
+		glbevent_t event = { 0 };
+		event.type = GLB_EVENT_RECEIVE;
+		event.receive.connection = con;
+		event.receive.channel = channel_id;
+		glbqueue_push(ctx->eventqueue, &event);
+
+		return GLB_SUCCESS;
+	}
+
+	glb_drain_rx_window(ctx, con, channel);
+
+	int32_t diff = glb_seqdiff(seq, channel->ack);
+
+	// Already delivered, acknowledge the duplicate again
+	if (diff < 0) {
+		glb_send_data_ack(ctx, con, channel, channel_id, seq);
+		return GLB_SUCCESS;
+	}
+
+	// Outside the receive window
+	if (diff > (int32_t)GLB_WINDOW_CAPACITY) {
+		return GLB_SUCCESS;
+	}
+
+	// The packet we are waiting for
+	if (diff == 0) {
+		if (glb_deliver_ordered(ctx, con, channel, pkg) != GLB_SUCCESS) {
+			return GLB_ERROR_QUEUE_FULL;
+		}
+
+		channel->ack++;
+		channel->rx_ackbits >>= 1;
+
+		glb_drain_rx_window(ctx, con, channel);
+
+		return GLB_SUCCESS;
+	}
+
+	// Store out-of-order packet
+	int result = glbwnd_insert(channel->rx_window, pkg);
+
+	if (result == GLB_SUCCESS || result == GLB_ERROR_WINDOW_DUPLICATE) {
+		channel->rx_ackbits |= 1u << (diff - 1);
+	}
+	else {
+		return result;
+	}
+
+	return GLB_SUCCESS;
+
+#if 0
 	char buffer[128];
 
 	// Сheck sequence number, drop duplicates, etc.
-#if 1
-	//if (headerptr->seq < channel->ack && channel->flags & GLB_CHANNEL_FLAG_RELIABLE) {
 	if (glb_seqdiff(pkg->header.seq, channel->ack) < 0 && channel->flags & GLB_CHANNEL_FLAG_RELIABLE_ORDERED) {
 		// Old packet
 		snprintf(buffer, 128, "[gilberta] Old packet detected! Sequence number %u, expected %u (channel: %u)", pkg->header.seq, channel->ack, (uint32_t)pkg->header.channel_id);
@@ -221,29 +341,17 @@ static int glb_receive_data(glbctx_t* ctx, glbconn_t* con, glbchannel_t* channel
 
 	//if (headerptr->seq > channel->ack && channel->flags & GLB_CHANNEL_FLAG_RELIABLE) {
 	if (glb_seqdiff(pkg->header.seq, channel->ack) > 0 && channel->flags & GLB_CHANNEL_FLAG_RELIABLE_ORDERED) {
-		// packet from future
-#else
-	if (headerptr->seq != channel->ack) {
-#endif
+		// packet from future, add this one to window and mark ackbits
+
+
+
+#if 0
 		con->desync_count++;
 		snprintf(buffer, 128, "[gilberta] DESYNC! Sequence number %u, expected %u (channel: %u)", pkg->header.seq, channel->ack, (uint32_t)pkg->header.channel_id);
 		ctx->logger(GLB_LOG_ERROR, buffer);
+#endif
 		return GLB_SUCCESS;
 	}
-
-#if 0
-	if (headerptr->seq <= con->channels[headerptr->channel_id].ack) {
-		// Old packet, send ACK
-		if (con->channels[headerptr->channel_id].flags & GLB_CHANNEL_FLAG_RELIABLE) {
-			glbpkg_init(&pkg, con->conn_id, GLB_CTRL_FLAG_ACK | GLB_CTRL_FLAG_DATA, headerptr->channel_id);
-			pkg.header.ack = headerptr->seq;
-			pkg.header.seq = con->channels[headerptr->channel_id].seq;
-			glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, con->peer_addr_len);
-		}
-		continue;
-	}
-#endif
-
 
 	glbqueue* queue = channel->r_queue;
 	if (glbqueue_is_full(queue) || glbqueue_size(ctx->eventqueue) + GLB_EVENT_RESERVE >= ctx->eventqueue->capacity) {
@@ -278,6 +386,7 @@ static int glb_receive_data(glbctx_t* ctx, glbconn_t* con, glbchannel_t* channel
 	glbqueue_push(ctx->eventqueue, &event);
 
 	return GLB_SUCCESS;
+#endif
 }
 
 static int glb_send_data(glbctx_t* ctx) {
