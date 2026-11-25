@@ -194,12 +194,13 @@ int glb_send(glbctx_t* ctx, glbsendinfo_t* info) {
 	return GLB_SUCCESS;
 }
 
-static int glb_send_data_ack(glbctx_t* ctx, glbconn_t* con, glbchannel_t* channel, uint8_t channel_id, uint32_t seq) {
+static int glb_send_data_ack(glbctx_t* ctx, glbconn_t* con, glbchannel_t* channel, uint8_t channel_id) {
 	glbpkg ack_pkg = { 0 };
 
 	glbpkg_init(&ack_pkg, con->conn_id, GLB_CTRL_FLAG_ACK | GLB_CTRL_FLAG_DATA, channel_id);
-	ack_pkg.header.ack = seq;
 	ack_pkg.header.seq = channel->seq;
+	ack_pkg.header.ack = channel->ack;
+	ack_pkg.header.ack_bits = channel->rx_ackbits;
 
 	return glbio_send(ctx, &ack_pkg, (struct sockaddr*)&con->peer_addr, con->peer_addr_len);
 }
@@ -207,7 +208,7 @@ static int glb_send_data_ack(glbctx_t* ctx, glbconn_t* con, glbchannel_t* channe
 static int glb_deliver_ordered(glbctx_t* ctx, glbconn_t* con, glbchannel_t* channel, glbpkg* pkg) {
 	glbqueue* queue = channel->r_queue;
 
-	if (glbqueue_is_full(queue) || glbqueue_size(queue) + GLB_EVENT_RESERVE >= ctx->eventqueue->capacity) {
+	if (glbqueue_is_full(queue) || glbqueue_size(ctx->eventqueue) + GLB_EVENT_RESERVE >= ctx->eventqueue->capacity) {
 		return GLB_ERROR_QUEUE_FULL;
 	}
 
@@ -222,8 +223,6 @@ static int glb_deliver_ordered(glbctx_t* ctx, glbconn_t* con, glbchannel_t* chan
 	if (glbqueue_push(ctx->eventqueue, &event) != GLB_SUCCESS) {
 		return GLB_ERROR_QUEUE_FULL;
 	}
-
-	glb_send_data_ack(ctx, con, channel, pkg->header.channel_id, pkg->header.seq);
 
 	return GLB_SUCCESS;
 }
@@ -247,6 +246,8 @@ static int glb_drain_rx_window(glbctx_t* ctx, glbconn_t* con, glbchannel_t* chan
 		channel->ack++;
 		channel->rx_ackbits >>= 1;
 	}
+
+	return GLB_SUCCESS;
 }
 
 static int glb_receive_data(glbctx_t* ctx, glbconn_t* con, glbchannel_t* channel, glbpkg* pkg) {
@@ -258,7 +259,7 @@ static int glb_receive_data(glbctx_t* ctx, glbconn_t* con, glbchannel_t* channel
 	if ((channel->flags & GLB_CHANNEL_FLAG_RELIABLE_ORDERED) == 0) {
 		glbqueue* queue = channel->r_queue;
 
-		if (glbqueue_is_full(queue) || glbqueue_size(queue) + GLB_EVENT_RESERVE >= ctx->eventqueue->capacity) {
+		if (glbqueue_is_full(queue) || glbqueue_size(ctx->eventqueue) + GLB_EVENT_RESERVE >= ctx->eventqueue->capacity) {
 			return GLB_ERROR_QUEUE_FULL;
 		}
 
@@ -283,12 +284,13 @@ static int glb_receive_data(glbctx_t* ctx, glbconn_t* con, glbchannel_t* channel
 
 	// Already delivered, acknowledge the duplicate again
 	if (diff < 0) {
-		glb_send_data_ack(ctx, con, channel, channel_id, seq);
+		glb_send_data_ack(ctx, con, channel, channel_id);
 		return GLB_SUCCESS;
 	}
 
 	// Outside the receive window
 	if (diff > (int32_t)GLB_WINDOW_CAPACITY) {
+		glb_send_data_ack(ctx, con, channel, channel_id);
 		return GLB_SUCCESS;
 	}
 
@@ -301,7 +303,7 @@ static int glb_receive_data(glbctx_t* ctx, glbconn_t* con, glbchannel_t* channel
 		channel->ack++;
 		channel->rx_ackbits >>= 1;
 
-		glb_drain_rx_window(ctx, con, channel);
+		glb_send_data_ack(ctx, con, channel, channel_id);
 
 		return GLB_SUCCESS;
 	}
@@ -315,6 +317,8 @@ static int glb_receive_data(glbctx_t* ctx, glbconn_t* con, glbchannel_t* channel
 	else {
 		return result;
 	}
+
+	glb_send_data_ack(ctx, con, channel, channel_id);
 
 	return GLB_SUCCESS;
 
@@ -919,28 +923,14 @@ int glb_tick(glbctx_t* ctx) {
 
 			glbchannel_t* channel = &con->channels[headerptr->channel_id];
 
-#if 0
-			if (headerptr->ack > channel->seq) {
-				continue;
-			}
-			glbpkg* pkgptr = NULL;
-			if (glbqueue_peek(channel->s_queue, &pkgptr) == GLB_SUCCESS) {
-				// NULL check not needed
-				// Check seq number
-				if (pkgptr->header.seq != headerptr->ack) {
-					continue;
-				}
-			}
-#endif
 			glbpkg* lpkg = NULL;
-			if (glbqueue_peek(channel->s_queue, (void**)&lpkg) == GLB_SUCCESS) {
-				//printf("QUEUE - current: %u expected: %u\n", lpkg->header.seq, headerptr->ack);
-				//printf("RECVD s:%u a:%u\n", headerptr->seq, headerptr->ack);
-				if (lpkg->header.seq == headerptr->ack) {
-					glbqueue_pop(channel->s_queue, NULL); // Remove acknowledged packet from send queue
+			while (glbqueue_peek(channel->s_queue, (void**)&lpkg) == GLB_SUCCESS) {
+				if (glb_seqdiff(lpkg->header.seq, headerptr->ack) >= 0) {
+					break;
 				}
-			}
 
+				glbqueue_pop(channel->s_queue, NULL); // Remove acknowledged packet from send queue
+			}
 
 			continue;
 		}
