@@ -194,6 +194,121 @@ int glb_send(glbctx_t* ctx, glbsendinfo_t* info) {
 	return GLB_SUCCESS;
 }
 
+static void glb_process_data_ack(glbchannel_t* ch, uint32_t ack, uint32_t ack_bits) {
+	int32_t sent = glb_seqdiff(ch->tx_next, ch->tx_base);
+	if (sent <= 0 || sent > (int32_t)GLB_WINDOW_CAPACITY) {
+		return;
+	}
+
+	int32_t cumulative = glb_seqdiff(ack, ch->tx_base);
+
+	if (cumulative > sent) {
+		return;
+	}
+
+	for (int32_t i = 0; i < cumulative; i++) {
+		uint32_t seq = ch->tx_base + (uint32_t)i;
+		ch->tx_acked |= 1u << i;
+		glbwnd_remove(ch->tx_window, seq, NULL);
+	}
+
+	for (uint32_t i = 0; i < GLB_WINDOW_CAPACITY; i++) {
+		if ((ack_bits & (1u << i)) == 0) {
+			continue;
+		}
+
+		uint32_t seq = ack + 1u + i;
+		int32_t offset = glb_seqdiff(seq, ch->tx_base);
+
+		if (offset < 0 || offset >= sent) {
+			continue;
+		}
+
+		ch->tx_acked |= 1u << (uint32_t)offset;
+		glbwnd_remove(ch->tx_window, seq, NULL);
+	}
+
+	while (ch->tx_acked & 1u) {
+		ch->tx_acked >>= 1;
+		ch->tx_base++;
+	}
+}
+
+static int glb_fill_tx_window(glbchannel_t* ch) {
+	glbpkg* pkg = NULL;
+
+	while (glb_seqdiff(ch->tx_next, ch->tx_base) < (int32_t)GLB_WINDOW_CAPACITY) {
+		if (glbqueue_peek(ch->s_queue, (void**)&pkg) != GLB_SUCCESS) {
+			break;
+		}
+
+		if (!pkg || pkg->header.seq != ch->tx_next) {
+			return GLB_ERROR_WINDOW_INVALID_SEQ;
+		}
+
+		int result = glbwnd_insert(ch->tx_window, pkg);
+		if (result != GLB_SUCCESS) {
+			return result;
+		}
+
+		glbqueue_pop(ch->s_queue, NULL);
+		ch->tx_next++;
+	}
+
+	return GLB_SUCCESS;
+}
+
+static void glb_send_tx_window(glbctx_t* ctx, glbconn_t* con, glbchannel_t* ch) {
+	int32_t outstanding = glb_seqdiff(ch->tx_next, ch->tx_base);
+
+	if (outstanding <= 0 || outstanding > (int32_t)GLB_WINDOW_CAPACITY) {
+		return;
+	}
+
+	for (int32_t i = 0; i < outstanding; i++) {
+		uint32_t bit = 1u << (uint32_t)i;
+
+		if (ch->tx_acked & bit) {
+			continue;
+		}
+
+		uint32_t seq = ch->tx_base + (uint32_t)i;
+
+		glbpkg pkg;
+		if (glbwnd_find(ch->tx_window, seq, &pkg) != GLB_SUCCESS) {
+			continue;
+		}
+
+		if (!glbtime_isexpired(&pkg.timestamp)) {
+			continue;
+		}
+
+		if (glbio_send(ctx, &pkg, (struct sockaddr*)&con->peer_addr, con->peer_addr_len) != GLB_SUCCESS) {
+			continue;
+		}
+
+		glbtime_start(&pkg.timestamp, GLB_RETRANSMISSION_TIMEOUT);
+		pkg.retransmit_count++;
+
+		if (pkg.retransmit_count > GLB_MAX_RETRY) {
+			// Stalled
+			con->loss_count++;
+			pkg.retransmit_count = 0;
+
+			glbevent_t event = { 0 };
+			event.type = GLB_EVENT_STALLED;
+			event.stalled.connection = con;
+			event.stalled.seq = pkg.header.seq;
+
+			glbqueue_push(ctx->eventqueue, &event);
+		}
+
+		// TODO: Use pointer to pkg
+		glbwnd_remove(ch->tx_window, seq, NULL);
+		glbwnd_insert(ch->tx_window, &pkg);
+	}
+}
+
 static int glb_send_data_ack(glbctx_t* ctx, glbconn_t* con, glbchannel_t* channel, uint8_t channel_id) {
 	glbpkg ack_pkg = { 0 };
 
@@ -482,6 +597,25 @@ static int glb_send_data(glbctx_t* ctx) {
 			if (con->state == GLB_CONNECTION_ESTABLISHED) {
 				for (size_t ch = 0; ch < ctx->channel_count; ch++) {
 					glbchannel_t* chan = &con->channels[ch];
+
+					if (chan->flags & GLB_CHANNEL_FLAG_RELIABLE_ORDERED) {
+						glb_fill_tx_window(chan);
+						glb_send_tx_window(ctx, con, chan);
+						continue;
+					}
+
+					glbpkg* pkg_ptr = NULL;
+
+					if (glbqueue_peek(chan->s_queue, (void**)&pkg_ptr) != GLB_SUCCESS || !pkg_ptr) {
+						continue;
+					}
+
+					if (glbtime_isexpired(&pkg_ptr->timestamp)) {
+						glbio_send(ctx, pkg_ptr, (struct sockaddr*)&con->peer_addr, con->peer_addr_len);
+						glbqueue_pop(chan->s_queue, NULL);
+					}
+
+#if 0
 					size_t queue_size = glbqueue_size(chan->s_queue);
 					if (queue_size == 0) {
 						continue;
@@ -510,7 +644,6 @@ static int glb_send_data(glbctx_t* ctx) {
 						pkg_ptr->retransmit_count++;
 
 						if (pkg_ptr->retransmit_count > GLB_MAX_RETRY) {
-
 							// Do not give-up
 							//glbqueue_pop(chan->s_queue, &pkg);
 							con->loss_count++;
@@ -524,21 +657,9 @@ static int glb_send_data(glbctx_t* ctx) {
 							event.stalled.connection = con;
 							event.stalled.seq = pkg_ptr->header.seq;
 							glbqueue_push(ctx->eventqueue, &event);
-
-							// TODO: Try RESYNC?
-#if 0
-							// Too many retransmissions, close connection
-							con->state = GLB_CONNECTION_CLOSED;
-							glbctx_freeconchannels(ctx, con);
-							// Generate event (Disconnect)
-							glbevent_t event;
-							event.type = GLB_EVENT_DISCONNECT;
-							event.disconnect.connection = con;
-							event.disconnect.reason = GLB_DISCONNECT_TIMEOUT;
-							glbqueue_push(ctx->eventqueue, &event);
-#endif
 						}
 					}
+#endif
 
 				}
 
@@ -923,6 +1044,10 @@ int glb_tick(glbctx_t* ctx) {
 
 			glbchannel_t* channel = &con->channels[headerptr->channel_id];
 
+			if (channel->flags & GLB_CHANNEL_FLAG_RELIABLE_ORDERED) {
+				glb_process_data_ack(channel, headerptr->ack, headerptr->ack_bits);
+			}
+#if 0
 			glbpkg* lpkg = NULL;
 			while (glbqueue_peek(channel->s_queue, (void**)&lpkg) == GLB_SUCCESS) {
 				if (glb_seqdiff(lpkg->header.seq, headerptr->ack) >= 0) {
@@ -931,6 +1056,7 @@ int glb_tick(glbctx_t* ctx) {
 
 				glbqueue_pop(channel->s_queue, NULL); // Remove acknowledged packet from send queue
 			}
+#endif
 
 			continue;
 		}
