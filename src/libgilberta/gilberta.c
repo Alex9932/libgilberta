@@ -508,7 +508,7 @@ static int glb_receive_data(glbctx_t* ctx, glbconn_t* con, glbchannel_t* channel
 #endif
 }
 
-static int glb_send_data(glbctx_t* ctx) {
+static void glb_send_data(glbctx_t* ctx) {
 	// Check timers
 	// Data transmit
 
