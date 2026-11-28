@@ -2,6 +2,7 @@
 #define INPUT_H
 
 #include <stdio.h>
+#include <signal.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -21,10 +22,17 @@ typedef pthread_t     THREAD_HANDLE;
 typedef pthread_mutex_t   MUTEX_T;
 #endif
 
-static char input_buffer[512];
+#define INPUT_BUFFER_LENGTH 512
+
+static char input_buffer[INPUT_BUFFER_LENGTH];
 static int  got_input = 0;
-static int  keep_running = 1;
+static volatile sig_atomic_t keep_running = 1;
 static MUTEX_T mutex;
+
+static void SignalHandler(int signal) {
+    (void)signal;
+    keep_running = 0;
+}
 
 THREAD_RET input_thread_func(void* arg) {
     (void)arg;
@@ -99,6 +107,7 @@ void mutex_unlock(MUTEX_T* m) {
 }
 
 THREAD_HANDLE create_input_thread() {
+    signal(SIGINT, SignalHandler);
 #ifdef _WIN32
     unsigned int tid;
     return (THREAD_HANDLE)_beginthreadex(NULL, 0, input_thread_func, NULL, 0, &tid);
